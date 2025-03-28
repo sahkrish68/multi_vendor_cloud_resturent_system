@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "343377583902",
+    "project_id": "multivendorcloudlitchen",
+    "storage_bucket": "multivendorcloudlitchen.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:343377583902:android:18b4778649eebd087d330f",
+        "android_client_info": {
+          "package_name": "com.example.multi_vendor_cloud_resturent_system"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "343377583902-ka3ngdu8e1fmd91ctbij5j6smbd2mgag.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQ9R3zi8UJtKPjZGQDG1Nf8NeGgBdnV1w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "343377583902-ka3ngdu8e1fmd91ctbij5j6smbd2mgag.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
