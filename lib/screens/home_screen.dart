@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'restaurant_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -10,23 +12,27 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final AuthService _auth = AuthService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   int _currentIndex = 0;
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Food Delivery'),
+        title: _currentIndex == 0 
+            ? Text('Food Delivery')
+            : Text('Search Restaurants'),
         actions: [
+          if (_currentIndex == 0)
+            IconButton(
+              icon: Icon(Icons.shopping_cart),
+              onPressed: () => setState(() => _currentIndex = 2),
+            ),
           IconButton(
             icon: Icon(Icons.logout),
-            onPressed: () async {
-              await _auth.signOut();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => LoginScreen()),
-              );
-            },
+            onPressed: _signOut,
           ),
         ],
       ),
@@ -35,20 +41,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _signOut() async {
+    await _auth.signOut();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => LoginScreen()),
+    );
+  }
+
   BottomNavigationBar _buildBottomNavBar() {
     return BottomNavigationBar(
       currentIndex: _currentIndex,
-      onTap: (index) {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
+      onTap: (index) => setState(() => _currentIndex = index),
       type: BottomNavigationBarType.fixed,
-      selectedItemColor: Colors.orange, // Active tab color
-      unselectedItemColor: Colors.grey, // Inactive tab color
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      iconSize: 28,
+      selectedItemColor: Colors.orange,
+      unselectedItemColor: Colors.grey,
       items: const [
         BottomNavigationBarItem(
           icon: Icon(Icons.home_outlined),
@@ -61,9 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Search',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.shopping_cart_outlined),
-          activeIcon: Icon(Icons.shopping_cart),
-          label: 'Cart',
+          icon: Icon(Icons.favorite_outline),
+          activeIcon: Icon(Icons.favorite),
+          label: 'Favorites',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),
@@ -76,112 +83,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _getBody(int index) {
     switch (index) {
-      case 0:
-        return _buildHomeTab();
-      case 1:
-        return _buildSearchTab();
-      case 2:
-        return _buildCartTab();
-      case 3:
-        return _buildProfileTab();
-      default:
-        return _buildHomeTab();
+      case 0: return _buildHomeTab();
+      case 1: return _buildSearchTab();
+      case 2: return _buildFavoritesTab();
+      case 3: return _buildProfileTab();
+      default: return _buildHomeTab();
     }
   }
 
   Widget _buildHomeTab() {
     return SingleChildScrollView(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Featured restaurants
+          // Search Bar
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              'Featured Restaurants',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-          Container(
-            height: 200,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: 5,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Card(
-                    child: Container(
-                      width: 150,
-                      child: Column(
-                        children: [
-                          Image.network(
-                            'https://images.pexels.com/photos/5550323/pexels-photo-5550323.jpeg?auto=compress&cs=tinysrgb&w=1200',
-                            height: 100,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                          Text('Restaurant ${index + 1}'),
-                          Text('⭐ 4.5'),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          
-          // Food categories
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              'Categories',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-          GridView.count(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            crossAxisCount: 3,
-            children: List.generate(6, (index) {
-              List<String> categories = [
-                'Pizza', 'Burger', 'Sushi', 'Pasta', 'Salad', 'Dessert'
-              ];
-              return Card(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.fastfood, size: 30),
-                    Text(categories[index]),
-                  ],
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search for restaurants or dishes...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
                 ),
-              );
-            }),
-          ),
-          
-          // Popular items
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              'Popular Near You',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              onChanged: (value) => setState(() => _searchQuery = value),
             ),
           ),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            itemCount: 5,
-            itemBuilder: (context, index) {
-              return ListTile(
-                leading: Image.network('https://images.pexels.com/photos/1410235/pexels-photo-1410235.jpeg?auto=compress&cs=tinysrgb&w=1200'),
-                title: Text('Food Item ${index + 1}'),
-                subtitle: Text('Restaurant ${index + 1} • ⭐ 4.5 • \$10'),
-                trailing: IconButton(
-                  icon: Icon(Icons.add),
-                  onPressed: () {},
-                ),
-              );
-            },
+
+          // Featured Restaurants
+          _buildSectionHeader('Featured Restaurants'),
+          _buildRestaurantList(
+            query: _firestore.collection('restaurants')
+              .where('isFeatured', isEqualTo: true)
+              .limit(10)
+          ),
+
+          // Food Categories
+          _buildSectionHeader('Categories'),
+          _buildCategoryGrid(),
+
+          // Nearby Restaurants
+          _buildSectionHeader('Near You'),
+          _buildRestaurantList(
+            query: _firestore.collection('restaurants')
+              .orderBy('distance', descending: false)
+              .limit(10)
           ),
         ],
       ),
@@ -189,94 +136,252 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSearchTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search, size: 64, color: Colors.grey[400]),
-          SizedBox(height: 16),
-          Text(
-            'Search for restaurants or dishes',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Search restaurants, dishes...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
             ),
+            onChanged: (value) => setState(() => _searchQuery = value),
           ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: _buildRestaurantList(
+            query: _firestore.collection('restaurants')
+              .where('name', isGreaterThanOrEqualTo: _searchQuery)
+              .where('name', isLessThan: _searchQuery + 'z')
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildCartTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey[400]),
-          SizedBox(height: 16),
-          Text(
-            'Your cart is empty',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
+  Widget _buildFavoritesTab() {
+    final userId = _firebaseAuth.currentUser?.uid;
+    if (userId == null) {
+      return Center(child: Text('Please sign in to view favorites'));
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(userId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        
+        List<dynamic> favorites = snapshot.data?['favorites'] ?? [];
+        
+        if (favorites.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.favorite_border, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No favorites yet'),
+                TextButton(
+                  onPressed: () => setState(() => _currentIndex = 0),
+                  child: Text('Browse restaurants'),
+                ),
+              ],
             ),
-          ),
-          SizedBox(height: 8),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _currentIndex = 0; // Switch to Home tab
-              });
-            },
-            child: Text('Browse restaurants'),
-          ),
-        ],
-      ),
+          );
+        }
+
+        return _buildRestaurantList(
+          query: _firestore.collection('restaurants')
+            .where(FieldPath.documentId, whereIn: favorites)
+        );
+      },
     );
   }
 
   Widget _buildProfileTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 48,
-            backgroundColor: Colors.grey[200],
-            child: Icon(
-              Icons.person,
-              size: 48,
-              color: Colors.grey[600],
+    final userId = _firebaseAuth.currentUser?.uid;
+    if (userId == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_outline, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Guest User'),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _signOut,
+              child: Text('Sign In'),
             ),
+          ],
+        ),
+      );
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(userId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        
+        var userData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundImage: userData['photoUrl'] != null 
+                    ? NetworkImage(userData['photoUrl'])
+                    : null,
+                child: userData['photoUrl'] == null 
+                    ? Icon(Icons.person, size: 50)
+                    : null,
+              ),
+              SizedBox(height: 16),
+              Text(
+                userData['name'] ?? 'No Name',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(userData['email'] ?? ''),
+              SizedBox(height: 24),
+              ListTile(
+                leading: Icon(Icons.history),
+                title: Text('Order History'),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: Icon(Icons.favorite),
+                title: Text('Favorites'),
+                onTap: () => setState(() => _currentIndex = 2),
+              ),
+              ListTile(
+                leading: Icon(Icons.settings),
+                title: Text('Settings'),
+                onTap: () {},
+              ),
+              SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _signOut,
+                child: Text('Sign Out'),
+              ),
+            ],
           ),
-          SizedBox(height: 16),
-          Text(
-            'Guest User',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Sign in for more features',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => LoginScreen()),
-              );
-            },
-            child: Text('Sign In'),
-          ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
+    );
+  }
+
+  Widget _buildCategoryGrid() {
+    List<Map<String, dynamic>> categories = [
+      {'name': 'Pizza', 'icon': Icons.local_pizza},
+      {'name': 'Burger', 'icon': Icons.fastfood},
+      {'name': 'Sushi', 'icon': Icons.set_meal},
+      {'name': 'Pasta', 'icon': Icons.restaurant},
+      {'name': 'Salad', 'icon': Icons.eco},
+      {'name': 'Dessert', 'icon': Icons.cake},
+      {'name': 'Drinks', 'icon': Icons.local_drink},
+      {'name': 'View All', 'icon': Icons.more_horiz},
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: categories.length,
+      itemBuilder: (context, index) {
+        return Card(
+          child: InkWell(
+            onTap: () {},
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(categories[index]['icon'], size: 30),
+                SizedBox(height: 8),
+                Text(categories[index]['name']),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRestaurantList({required Query query}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: query.snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator());
+        }
+        
+        if (snapshot.data!.docs.isEmpty) {
+          return Center(child: Text('No restaurants found'));
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            var restaurant = snapshot.data!.docs[index];
+            return Card(
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: restaurant['imageUrl'] != null
+                      ? NetworkImage(restaurant['imageUrl'])
+                      : null,
+                  child: restaurant['imageUrl'] == null
+                      ? Icon(Icons.restaurant)
+                      : null,
+                ),
+                title: Text(restaurant['name']),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(restaurant['address'] ?? ''),
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 16, color: Colors.orange),
+                        Text(' ${restaurant['rating']?.toStringAsFixed(1) ?? '0.0'}'),
+                        Text(' • ${restaurant['deliveryTime'] ?? '20-30'} min'),
+                      ],
+                    ),
+                  ],
+                ),
+                trailing: Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RestaurantDetailScreen(
+                        restaurantId: restaurant.id,
+                        restaurantName: restaurant['name'],
+                        restaurantImage: restaurant['imageUrl'],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
