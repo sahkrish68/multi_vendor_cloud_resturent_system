@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'dart:io';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
@@ -18,30 +19,54 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
   int _currentIndex = 0;
-  final _formKey = GlobalKey<FormState>();
-  final _restaurantFormKey = GlobalKey<FormState>();
   
   // Menu Item Controllers
-  TextEditingController _nameController = TextEditingController();
-  TextEditingController _priceController = TextEditingController();
-  TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   String? _category;
   String? _imageUrl;
   String? _editingItemId;
   File? _imageFile;
 
-  // Restaurant Info Controllers
-  TextEditingController _restaurantNameController = TextEditingController();
-  TextEditingController _restaurantAddressController = TextEditingController();
-  TextEditingController _restaurantPhoneController = TextEditingController();
-  TextEditingController _restaurantDescriptionController = TextEditingController();
+  // Restaurant Info
+  final TextEditingController _restaurantNameController = TextEditingController();
+  final TextEditingController _restaurantAddressController = TextEditingController();
+  final TextEditingController _restaurantPhoneController = TextEditingController();
+  final TextEditingController _restaurantDescriptionController = TextEditingController();
   String? _restaurantImageUrl;
   File? _restaurantImageFile;
+
+  // Inventory
+  final TextEditingController _inventoryNameController = TextEditingController();
+  final TextEditingController _inventoryQuantityController = TextEditingController();
+  final TextEditingController _inventoryUnitController = TextEditingController();
+  final TextEditingController _inventoryThresholdController = TextEditingController();
+  String? _editingInventoryId;
+
+  // Staff
+  final TextEditingController _staffNameController = TextEditingController();
+  final TextEditingController _staffEmailController = TextEditingController();
+  final TextEditingController _staffPhoneController = TextEditingController();
+  final TextEditingController _staffRoleController = TextEditingController();
+  String? _staffImageUrl;
+  File? _staffImageFile;
+  String? _editingStaffId;
+
+  // Data
+  List<SalesData> _weeklySales = [];
+  List<PopularItem> _popularItems = [];
+  List<Map<String, dynamic>> _inventory = [];
+  List<Map<String, dynamic>> _staffMembers = [];
+  bool _isLoadingStats = true;
 
   @override
   void initState() {
     super.initState();
     _loadRestaurantInfo();
+    _loadStatistics();
+    _loadInventory();
+    _loadStaff();
   }
 
   Future<void> _loadRestaurantInfo() async {
@@ -62,6 +87,50 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadStatistics() async {
+    setState(() => _isLoadingStats = true);
+    
+    // Mock data
+    _weeklySales = [
+      SalesData('Mon', 450),
+      SalesData('Tue', 600),
+      SalesData('Wed', 300),
+      SalesData('Thu', 750),
+      SalesData('Fri', 500),
+      SalesData('Sat', 650),
+      SalesData('Sun', 800),
+    ];
+
+    _popularItems = [
+      PopularItem("Margherita Pizza", 42),
+      PopularItem("Chicken Burger", 35),
+      PopularItem("Caesar Salad", 28),
+      PopularItem("Pasta Carbonara", 25),
+      PopularItem("Chocolate Cake", 20),
+    ];
+
+    setState(() => _isLoadingStats = false);
+  }
+
+  Future<void> _loadInventory() async {
+    setState(() {
+      _inventory = [
+        {'id': '1', 'name': 'Flour', 'quantity': 20, 'unit': 'kg', 'threshold': 5},
+        {'id': '2', 'name': 'Tomato Sauce', 'quantity': 15, 'unit': 'L', 'threshold': 3},
+        {'id': '3', 'name': 'Cheese', 'quantity': 8, 'unit': 'kg', 'threshold': 2},
+      ];
+    });
+  }
+
+  Future<void> _loadStaff() async {
+    setState(() {
+      _staffMembers = [
+        {'id': '1', 'name': 'John Doe', 'role': 'Manager', 'email': 'john@example.com'},
+        {'id': '2', 'name': 'Jane Smith', 'role': 'Chef', 'email': 'jane@example.com'},
+      ];
+    });
   }
 
   @override
@@ -87,32 +156,16 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
       body: _getBody(_currentIndex),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.restaurant_menu),
-            label: 'Menu',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag),
-            label: 'Orders',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.store),
-            label: 'Restaurant',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics),
-            label: 'Analytics',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.restaurant_menu), label: 'Menu'),
+          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: 'Orders'),
+          BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Inventory'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Staff'),
         ],
       ),
     );
@@ -123,8 +176,8 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
       case 0: return _buildDashboardTab();
       case 1: return _buildMenuTab();
       case 2: return _buildOrdersTab();
-      case 3: return _buildRestaurantTab();
-      case 4: return _buildAnalyticsTab();
+      case 3: return _buildInventoryTab();
+      case 4: return _buildStaffTab();
       default: return _buildDashboardTab();
     }
   }
@@ -135,7 +188,6 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Restaurant Info Card
           Card(
             elevation: 4,
             shape: RoundedRectangleBorder(
@@ -162,10 +214,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                               _restaurantNameController.text.isNotEmpty 
                                   ? _restaurantNameController.text 
                                   : 'Your Restaurant',
-                              style: TextStyle(
-                                fontSize: 22, 
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                             ),
                             SizedBox(height: 8),
                             if (_restaurantAddressController.text.isNotEmpty)
@@ -175,10 +224,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                                   children: [
                                     Icon(Icons.location_on, size: 16, color: Colors.grey),
                                     SizedBox(width: 4),
-                                    Text(
-                                      _restaurantAddressController.text,
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
+                                    Text(_restaurantAddressController.text),
                                   ],
                                 ),
                               ),
@@ -189,10 +235,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                                   children: [
                                     Icon(Icons.phone, size: 16, color: Colors.grey),
                                     SizedBox(width: 4),
-                                    Text(
-                                      _restaurantPhoneController.text,
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
+                                    Text(_restaurantPhoneController.text),
                                   ],
                                 ),
                               ),
@@ -204,20 +247,14 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                   if (_restaurantDescriptionController.text.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        _restaurantDescriptionController.text,
-                        style: TextStyle(fontSize: 14),
-                      ),
+                      child: Text(_restaurantDescriptionController.text),
                     ),
                 ],
               ),
             ),
           ),
           SizedBox(height: 24),
-          Text(
-            'Business Overview',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          Text('Business Overview', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           SizedBox(height: 16),
           GridView.count(
             shrinkWrap: true,
@@ -234,53 +271,31 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
             ],
           ),
           SizedBox(height: 24),
-          Text(
-            'Recent Orders',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          Text('Sales Analytics', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          SizedBox(height: 16),
+          Card(
+            elevation: 4,
+            child: Container(
+              height: 250,
+              padding: EdgeInsets.all(16),
+              child: _isLoadingStats
+                  ? Center(child: CircularProgressIndicator())
+                  : _buildCustomBarChart(),
+            ),
           ),
-          SizedBox(height: 8),
-          StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('orders')
-                .where('restaurantId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-                .orderBy('createdAt', descending: true)
-                .limit(5)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
-              }
-              
-              var orders = snapshot.data!.docs;
-              
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                itemCount: orders.length,
-                itemBuilder: (context, index) {
-                  var order = orders[index];
-                  return Card(
-                    margin: EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      leading: CircleAvatar(child: Text('${index + 1}')),
-                      title: Text('Order #${order.id.substring(0, 8)}'),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('\$${order['totalAmount'].toStringAsFixed(2)}'),
-                          Text('${order['items'].length} items • ${_formatTime(order['createdAt'].toDate())}'),
-                        ],
-                      ),
-                      trailing: Chip(
-                        label: Text(
-                          order['status'],
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        backgroundColor: _getStatusColor(order['status']),
-                      ),
-                    ),
-                  );
-                },
+          SizedBox(height: 24),
+          Text('Popular Items', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          SizedBox(height: 16),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: _popularItems.length,
+            itemBuilder: (context, index) {
+              var item = _popularItems[index];
+              return ListTile(
+                leading: CircleAvatar(child: Text('${index + 1}')),
+                title: Text(item.name),
+                subtitle: Text('${item.orderCount} orders'),
               );
             },
           ),
@@ -289,12 +304,53 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     );
   }
 
+  Widget _buildCustomBarChart() {
+    double maxValue = _weeklySales.map((e) => e.amount).reduce((a, b) => a > b ? a : b).toDouble();
+    
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: _weeklySales.map((data) {
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    children: [
+                      Text('\$${data.amount}', style: TextStyle(fontSize: 10)),
+                      SizedBox(height: 4),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                          height: (data.amount / maxValue) * 100,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: _weeklySales.map((data) {
+            return Text(data.day, style: TextStyle(fontSize: 12));
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -302,20 +358,8 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
           children: [
             Icon(icon, size: 30, color: color),
             SizedBox(height: 10),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24, 
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              title,
-              style: TextStyle(
-                color: Colors.grey[600],
-              ),
-            ),
+            Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+            Text(title, style: TextStyle(color: Colors.grey[600])),
           ],
         ),
       ),
@@ -330,128 +374,40 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Menu Items',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+              Text('Menu Items', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ElevatedButton.icon(
                 icon: Icon(Icons.add),
                 label: Text('Add Item'),
-                onPressed: () => _showAddMenuItemDialog(),
+                onPressed: _showAddMenuItemDialog,
               ),
             ],
           ),
           SizedBox(height: 16),
-          StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('restaurants')
-                .doc(FirebaseAuth.instance.currentUser?.uid)
-                .collection('menu')
-                .orderBy('name')
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
-              }
-              
-              if (snapshot.data!.docs.isEmpty) {
-                return Column(
-                  children: [
-                    SizedBox(height: 40),
-                    Icon(Icons.menu_book, size: 60, color: Colors.grey[300]),
-                    SizedBox(height: 16),
-                    Text(
-                      'No menu items yet',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Add your first menu item to get started',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                );
-              }
-              
-              var menuItems = snapshot.data!.docs;
-              
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                itemCount: menuItems.length,
-                itemBuilder: (context, index) {
-                  var item = menuItems[index];
-                  return Card(
-                    margin: EdgeInsets.symmetric(vertical: 8),
-                    child: ListTile(
-                      contentPadding: EdgeInsets.all(8),
-                      leading: item['imageUrl'] != null 
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                item['imageUrl'],
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(Icons.fastfood, size: 30, color: Colors.grey),
-                            ),
-                      title: Text(
-                        item['name'],
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '\$${item['price'].toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (item['description'] != null && item['description'].isNotEmpty)
-                            Text(
-                              item['description'],
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12),
-                            ),
-                        ],
-                      ),
-                      trailing: PopupMenuButton(
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            child: Text('Edit'),
-                            value: 'edit',
-                          ),
-                          PopupMenuItem(
-                            child: Text('Delete'),
-                            value: 'delete',
-                          ),
-                        ],
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            _showEditMenuItemDialog(item);
-                          } else if (value == 'delete') {
-                            _deleteMenuItem(item.id);
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                },
+          ListView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: 5,
+            itemBuilder: (context, index) {
+              return Card(
+                margin: EdgeInsets.symmetric(vertical: 8),
+                child: ListTile(
+                  leading: CircleAvatar(child: Icon(Icons.fastfood)),
+                  title: Text('Menu Item ${index + 1}'),
+                  subtitle: Text('\$${(index + 5).toStringAsFixed(2)}'),
+                  trailing: PopupMenuButton(
+                    itemBuilder: (context) => [
+                      PopupMenuItem(child: Text('Edit'), value: 'edit'),
+                      PopupMenuItem(child: Text('Delete'), value: 'delete'),
+                    ],
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        // Implement edit
+                      } else if (value == 'delete') {
+                        // Implement delete
+                      }
+                    },
+                  ),
+                ),
               );
             },
           ),
@@ -494,240 +450,227 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   }
 
   Widget _buildOrderList(String status) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('orders')
-          .where('restaurantId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-          .where('status', isEqualTo: status)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator());
-        }
-        
-        if (snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Text(
-              'No $status orders',
-              style: TextStyle(color: Colors.grey),
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: 3,
+      itemBuilder: (context, index) {
+        return Card(
+          margin: EdgeInsets.only(bottom: 16),
+          child: ExpansionTile(
+            title: Text('Order #${1000 + index}'),
+            subtitle: Text('\$${(index + 1) * 15}.00 • ${DateFormat('MMM d, h:mm a').format(DateTime.now().subtract(Duration(hours: index)))}'),
+            trailing: Chip(
+              label: Text(status.toUpperCase(), style: TextStyle(color: Colors.white)),
+              backgroundColor: _getStatusColor(status),
             ),
-          );
-        }
-        
-        var orders = snapshot.data!.docs;
-        
-        return ListView.builder(
-          padding: EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            var order = orders[index];
-            return Card(
-              margin: EdgeInsets.only(bottom: 16),
-              child: ExpansionTile(
-                title: Text('Order #${order.id.substring(0, 8)}'),
-                subtitle: Text(
-                  '\$${order['totalAmount'].toStringAsFixed(2)} • ${_formatTime(order['createdAt'].toDate())}',
-                ),
-                trailing: Chip(
-                  label: Text(
-                    order['status'].toUpperCase(),
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  backgroundColor: _getStatusColor(order['status']),
-                ),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(
-                      children: [
-                        ...order['items'].map<Widget>((item) => ListTile(
-                          leading: item['imageUrl'] != null
-                              ? Image.network(
-                                  item['imageUrl'],
-                                  width: 40,
-                                  height: 40,
-                                  fit: BoxFit.cover,
-                                )
-                              : Icon(Icons.fastfood),
-                          title: Text(item['name']),
-                          subtitle: Text('\$${item['price'].toStringAsFixed(2)}'),
-                          trailing: Text('x${item['quantity']}'),
-                        )).toList(),
-                        Divider(),
-                        ListTile(
-                          title: Text('Customer: ${order['customerName'] ?? 'N/A'}'),
-                          subtitle: Text('Phone: ${order['customerPhone'] ?? 'N/A'}'),
-                        ),
-                        if (order['deliveryAddress'] != null)
-                          ListTile(
-                            leading: Icon(Icons.location_on),
-                            title: Text('Delivery Address'),
-                            subtitle: Text(order['deliveryAddress']),
-                          ),
-                        SizedBox(height: 8),
-                        if (status == 'pending' || status == 'preparing' || status == 'ready')
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                if (status == 'pending')
-                                  ElevatedButton(
-                                    child: Text('Accept'),
-                                    onPressed: () => _updateOrderStatus(order.id, 'preparing'),
-                                  ),
-                                if (status == 'preparing')
-                                  ElevatedButton(
-                                    child: Text('Mark Ready'),
-                                    onPressed: () => _updateOrderStatus(order.id, 'ready'),
-                                  ),
-                                if (status == 'ready')
-                                  ElevatedButton(
-                                    child: Text('Mark Delivered'),
-                                    onPressed: () => _updateOrderStatus(order.id, 'completed'),
-                                  ),
-                                if (status != 'ready')
-                                  OutlinedButton(
-                                    child: Text('Cancel'),
-                                    onPressed: () => _updateOrderStatus(order.id, 'cancelled'),
-                                  ),
-                              ],
-                            ),
-                          ),
-                      ],
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.fastfood),
+                      title: Text('Item ${index + 1}'),
+                      subtitle: Text('\$${(index + 1) * 5}.00'),
+                      trailing: Text('x${index + 1}'),
                     ),
-                  ),
-                ],
+                    Divider(),
+                    ListTile(
+                      title: Text('Customer: John Doe'),
+                      subtitle: Text('Phone: +1234567890'),
+                    ),
+                    if (status == 'pending' || status == 'preparing' || status == 'ready')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            if (status == 'pending')
+                              ElevatedButton(
+                                child: Text('Accept'),
+                                onPressed: () {},
+                              ),
+                            if (status == 'preparing')
+                              ElevatedButton(
+                                child: Text('Mark Ready'),
+                                onPressed: () {},
+                              ),
+                            if (status == 'ready')
+                              ElevatedButton(
+                                child: Text('Mark Delivered'),
+                                onPressed: () {},
+                              ),
+                            if (status != 'ready')
+                              OutlinedButton(
+                                child: Text('Cancel'),
+                                onPressed: () {},
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            );
-          },
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildRestaurantTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Text(
-            'Restaurant Information',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+  Widget _buildInventoryTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Inventory', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ElevatedButton(
+                child: Text('Add Item'),
+                onPressed: _showAddInventoryDialog,
+              ),
+            ],
           ),
-          SizedBox(height: 20),
-          Form(
-            key: _restaurantFormKey,
-            child: Column(
-              children: [
-                GestureDetector(
-                  onTap: _pickRestaurantImage,
-                  child: CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.grey[200],
-                    backgroundImage: _restaurantImageFile != null
-                        ? FileImage(_restaurantImageFile!)
-                        : (_restaurantImageUrl != null
-                            ? NetworkImage(_restaurantImageUrl!)
-                            : null),
-                    child: _restaurantImageFile == null && _restaurantImageUrl == null
-                        ? Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
-                        : null,
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _inventory.length,
+            itemBuilder: (context, index) {
+              var item = _inventory[index];
+              bool isLowStock = (item['quantity'] ?? 0) <= (item['threshold'] ?? 0);
+              return Card(
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  title: Text(item['name']),
+                  subtitle: Text('Stock: ${item['quantity']} ${item['unit'] ?? ''}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isLowStock) Icon(Icons.warning, color: Colors.orange),
+                      SizedBox(width: 8),
+                      IconButton(icon: Icon(Icons.edit), onPressed: () {}),
+                      IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () {}),
+                    ],
                   ),
                 ),
-                SizedBox(height: 16),
-                TextFormField(
-                  controller: _restaurantNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Restaurant Name',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => value!.isEmpty ? 'Required' : null,
-                ),
-                SizedBox(height: 16),
-                TextFormField(
-                  controller: _restaurantAddressController,
-                  decoration: InputDecoration(
-                    labelText: 'Address',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
-                  validator: (value) => value!.isEmpty ? 'Required' : null,
-                ),
-                SizedBox(height: 16),
-                TextFormField(
-                  controller: _restaurantPhoneController,
-                  decoration: InputDecoration(
-                    labelText: 'Phone Number',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) => value!.isEmpty ? 'Required' : null,
-                ),
-                SizedBox(height: 16),
-                TextFormField(
-                  controller: _restaurantDescriptionController,
-                  decoration: InputDecoration(
-                    labelText: 'Description',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-                SizedBox(height: 24),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: Size(double.infinity, 50),
-                  ),
-                  child: Text('Save Information'),
-                  onPressed: _saveRestaurantInfo,
-                ),
-              ],
-            ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildAnalyticsTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Sales Analytics',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 20),
-          Container(
-            height: 200,
-            width: MediaQuery.of(context).size.width * 0.9,
-            decoration: BoxDecoration(
-              border: Border.all(),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                'Sales Chart - Last 7 Days',
-                style: TextStyle(fontSize: 18),
+  Widget _buildStaffTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Staff Members', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ElevatedButton(
+                child: Text('Add Staff'),
+                onPressed: _showAddStaffDialog,
               ),
-            ),
+            ],
           ),
-          SizedBox(height: 20),
-          Container(
-            height: 200,
-            width: MediaQuery.of(context).size.width * 0.9,
-            decoration: BoxDecoration(
-              border: Border.all(),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                'Popular Items - This Month',
-                style: TextStyle(fontSize: 18),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _staffMembers.length,
+            itemBuilder: (context, index) {
+              var staff = _staffMembers[index];
+              return Card(
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  leading: CircleAvatar(child: Icon(Icons.person)),
+                  title: Text(staff['name']),
+                  subtitle: Text(staff['role']),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(icon: Icon(Icons.edit), onPressed: () {}),
+                      IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () {}),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showAddMenuItemDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Menu Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(labelText: 'Name'),
               ),
-            ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _priceController,
+                decoration: InputDecoration(labelText: 'Price'),
+                keyboardType: TextInputType.number,
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _descriptionController,
+                decoration: InputDecoration(labelText: 'Description'),
+                maxLines: 3,
+              ),
+              SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _category,
+                hint: Text('Select Category'),
+                items: ['Appetizer', 'Main Course', 'Dessert', 'Drink']
+                    .map((category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _category = value;
+                  });
+                },
+              ),
+              SizedBox(height: 16),
+              _imageFile != null
+                  ? Image.file(_imageFile!, height: 100)
+                  : _imageUrl != null
+                      ? Image.network(_imageUrl!, height: 100)
+                      : Container(),
+              ElevatedButton(
+                onPressed: _pickImage,
+                child: Text('Select Image'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Save'),
+            onPressed: () {
+              // Save logic here
+              Navigator.pop(context);
+            },
           ),
         ],
       ),
@@ -743,435 +686,123 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     }
   }
 
-  Future<void> _pickRestaurantImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _restaurantImageFile = File(pickedFile.path);
-      });
-    }
-  }
-
-  Future<void> _uploadImage() async {
-    if (_imageFile == null) return;
-
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      // Upload file to Firebase Storage
-      String fileName = 'menu_items/${user.uid}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      TaskSnapshot snapshot = await _storage.ref(fileName).putFile(_imageFile!);
-      
-      // Get download URL
-      String downloadUrl = await snapshot.ref.getDownloadURL();
-      
-      setState(() {
-        _imageUrl = downloadUrl;
-      });
-    } catch (e) {
-      print('Error uploading image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload image')),
-      );
-    }
-  }
-
-  Future<void> _uploadRestaurantImage() async {
-    if (_restaurantImageFile == null) return;
-
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      // Upload file to Firebase Storage
-      String fileName = 'restaurants/${user.uid}/logo.jpg';
-      TaskSnapshot snapshot = await _storage.ref(fileName).putFile(_restaurantImageFile!);
-      
-      // Get download URL
-      String downloadUrl = await snapshot.ref.getDownloadURL();
-      
-      setState(() {
-        _restaurantImageUrl = downloadUrl;
-      });
-    } catch (e) {
-      print('Error uploading image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload image')),
-      );
-    }
-  }
-
-  void _showAddMenuItemDialog() {
-    _nameController.clear();
-    _priceController.clear();
-    _descriptionController.clear();
-    _category = null;
-    _imageUrl = null;
-    _imageFile = null;
-    _editingItemId = null;
-    
+  void _showAddInventoryDialog() {
     showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text('Add Menu Item'),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: _pickImage,
-                        child: Container(
-                          height: 120,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey),
-                          ),
-                          child: _imageFile != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(
-                                    _imageFile!,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : _imageUrl != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        _imageUrl!,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Center(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.add_a_photo, size: 40),
-                                          Text('Add Image'),
-                                        ],
-                                      ),
-                                    ),
-                        ),
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Item Name',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) => value!.isEmpty ? 'Required' : null,
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _priceController,
-                        decoration: InputDecoration(
-                          labelText: 'Price',
-                          border: OutlineInputBorder(),
-                          prefixText: '\$ ',
-                        ),
-                        keyboardType: TextInputType.numberWithOptions(decimal: true),
-                        validator: (value) => value!.isEmpty ? 'Required' : null,
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _descriptionController,
-                        decoration: InputDecoration(
-                          labelText: 'Description',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 3,
-                      ),
-                      SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _category,
-                        decoration: InputDecoration(
-                          labelText: 'Category',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: ['Appetizer', 'Main Course', 'Dessert', 'Drink', 'Side']
-                            .map((category) => DropdownMenuItem(
-                                  value: category,
-                                  child: Text(category),
-                                ))
-                            .toList(),
-                        onChanged: (value) => setState(() => _category = value),
-                        validator: (value) => value == null ? 'Required' : null,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  child: Text('Cancel'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                ElevatedButton(
-                  child: Text('Save'),
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate()) {
-                      if (_imageFile != null) {
-                        await _uploadImage();
-                      }
-                      _saveMenuItem();
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showEditMenuItemDialog(DocumentSnapshot item) {
-    _nameController.text = item['name'];
-    _priceController.text = item['price'].toString();
-    _descriptionController.text = item['description'] ?? '';
-    _category = item['category'];
-    _imageUrl = item['imageUrl'];
-    _editingItemId = item.id;
-    _imageFile = null;
-    
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text('Edit Menu Item'),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: _pickImage,
-                        child: Container(
-                          height: 120,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey),
-                          ),
-                          child: _imageFile != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(
-                                    _imageFile!,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : _imageUrl != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        _imageUrl!,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Center(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.add_a_photo, size: 40),
-                                          Text('Add Image'),
-                                        ],
-                                      ),
-                                    ),
-                        ),
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Item Name',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) => value!.isEmpty ? 'Required' : null,
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _priceController,
-                        decoration: InputDecoration(
-                          labelText: 'Price',
-                          border: OutlineInputBorder(),
-                          prefixText: '\$ ',
-                        ),
-                        keyboardType: TextInputType.numberWithOptions(decimal: true),
-                        validator: (value) => value!.isEmpty ? 'Required' : null,
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _descriptionController,
-                        decoration: InputDecoration(
-                          labelText: 'Description',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 3,
-                      ),
-                      SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _category,
-                        decoration: InputDecoration(
-                          labelText: 'Category',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: ['Appetizer', 'Main Course', 'Dessert', 'Drink', 'Side']
-                            .map((category) => DropdownMenuItem(
-                                  value: category,
-                                  child: Text(category),
-                                ))
-                            .toList(),
-                        onChanged: (value) => setState(() => _category = value),
-                        validator: (value) => value == null ? 'Required' : null,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  child: Text('Cancel'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                ElevatedButton(
-                  child: Text('Update'),
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate()) {
-                      if (_imageFile != null) {
-                        await _uploadImage();
-                      }
-                      _saveMenuItem();
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _saveMenuItem() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    Map<String, dynamic> menuItem = {
-      'name': _nameController.text,
-      'price': double.parse(_priceController.text),
-      'description': _descriptionController.text,
-      'category': _category,
-      'imageUrl': _imageUrl,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    if (_editingItemId == null) {
-      // Add new item
-      menuItem['createdAt'] = FieldValue.serverTimestamp();
-      await _firestore
-          .collection('restaurants')
-          .doc(user.uid)
-          .collection('menu')
-          .add(menuItem);
-    } else {
-      // Update existing item
-      await _firestore
-          .collection('restaurants')
-          .doc(user.uid)
-          .collection('menu')
-          .doc(_editingItemId)
-          .update(menuItem);
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_editingItemId == null ? 'Menu item added!' : 'Menu item updated!')),
-    );
-  }
-
-  Future<void> _deleteMenuItem(String itemId) async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Item'),
-        content: Text('Are you sure you want to delete this menu item?'),
+        title: Text('Add Inventory Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _inventoryNameController,
+                decoration: InputDecoration(labelText: 'Item Name'),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _inventoryQuantityController,
+                decoration: InputDecoration(labelText: 'Quantity'),
+                keyboardType: TextInputType.number,
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _inventoryUnitController,
+                decoration: InputDecoration(labelText: 'Unit (kg, L, etc.)'),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _inventoryThresholdController,
+                decoration: InputDecoration(labelText: 'Low Stock Threshold'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
             child: Text('Cancel'),
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context),
           ),
-          TextButton(
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
-            onPressed: () => Navigator.pop(context, true),
+          ElevatedButton(
+            child: Text('Save'),
+            onPressed: () {
+              // Save logic here
+              Navigator.pop(context);
+            },
           ),
         ],
       ),
     );
-
-    if (confirm == true) {
-      await _firestore
-          .collection('restaurants')
-          .doc(user.uid)
-          .collection('menu')
-          .doc(itemId)
-          .delete();
-          
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Menu item deleted')),
-      );
-    }
   }
 
-  Future<void> _saveRestaurantInfo() async {
-    if (_restaurantFormKey.currentState!.validate()) {
-      if (_restaurantImageFile != null) {
-        await _uploadRestaurantImage();
-      }
-
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      await _firestore.collection('restaurants').doc(user.uid).set({
-        'name': _restaurantNameController.text,
-        'address': _restaurantAddressController.text,
-        'phone': _restaurantPhoneController.text,
-        'description': _restaurantDescriptionController.text,
-        'imageUrl': _restaurantImageUrl,
-        'ownerId': user.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restaurant information saved successfully')),
-      );
-      
-      setState(() {}); // Refresh UI
-    }
+  void _showAddStaffDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Staff Member'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _staffNameController,
+                decoration: InputDecoration(labelText: 'Full Name'),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _staffEmailController,
+                decoration: InputDecoration(labelText: 'Email'),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _staffPhoneController,
+                decoration: InputDecoration(labelText: 'Phone'),
+                keyboardType: TextInputType.phone,
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _staffRoleController,
+                decoration: InputDecoration(labelText: 'Role'),
+              ),
+              SizedBox(height: 16),
+              _staffImageFile != null
+                  ? Image.file(_staffImageFile!, height: 100)
+                  : _staffImageUrl != null
+                      ? Image.network(_staffImageUrl!, height: 100)
+                      : Container(),
+              ElevatedButton(
+                onPressed: _pickStaffImage,
+                child: Text('Select Image'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Save'),
+            onPressed: () {
+              // Save logic here
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
-  Future<void> _updateOrderStatus(String orderId, String newStatus) async {
-    await _firestore.collection('orders').doc(orderId).update({
-      'status': newStatus,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+  Future<void> _pickStaffImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _staffImageFile = File(pickedFile.path);
+      });
+    }
   }
 
   Color _getStatusColor(String status) {
@@ -1180,13 +811,8 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
       case 'preparing': return Colors.blue;
       case 'ready': return Colors.green;
       case 'completed': return Colors.purple;
-      case 'cancelled': return Colors.red;
       default: return Colors.grey;
     }
-  }
-
-  String _formatTime(DateTime time) {
-    return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -1198,6 +824,28 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     _restaurantAddressController.dispose();
     _restaurantPhoneController.dispose();
     _restaurantDescriptionController.dispose();
+    _inventoryNameController.dispose();
+    _inventoryQuantityController.dispose();
+    _inventoryUnitController.dispose();
+    _inventoryThresholdController.dispose();
+    _staffNameController.dispose();
+    _staffEmailController.dispose();
+    _staffPhoneController.dispose();
+    _staffRoleController.dispose();
     super.dispose();
   }
+}
+
+class SalesData {
+  final String day;
+  final int amount;
+
+  SalesData(this.day, this.amount);
+}
+
+class PopularItem {
+  final String name;
+  final int orderCount;
+
+  PopularItem(this.name, this.orderCount);
 }

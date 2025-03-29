@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';  // Assuming you have a HomeScreen widget
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,14 +33,14 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.active) {
           User? user = snapshot.data;
           if (user == null) {
-            return LoginScreen();
+            return LoginScreen();  // Show login screen when no user is authenticated
           }
-          // Add your home screen logic here
-          return LoginScreen(); // Temporary
+          return HomeScreen();  // Show home screen when user is authenticated
         }
+        
         return Scaffold(
           body: Center(
-            child: CircularProgressIndicator(),
+            child: CircularProgressIndicator(),  // Show loading while checking authentication status
           ),
         );
       },

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'restaurant_detail_screen.dart';
+import 'cart_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -18,6 +19,29 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    _initializeUserData();
+  }
+
+  Future<void> _initializeUserData() async {
+    final user = _firebaseAuth.currentUser;
+    if (user != null) {
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      if (!userDoc.exists) {
+        await _firestore.collection('users').doc(user.uid).set({
+          'name': user.displayName ?? '',
+          'email': user.email ?? '',
+          'photoUrl': user.photoURL ?? '',
+          'favorites': [],
+          'cart': [],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -28,7 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
           if (_currentIndex == 0)
             IconButton(
               icon: Icon(Icons.shopping_cart),
-              onPressed: () => setState(() => _currentIndex = 2),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CartScreen()),
+              ),
             ),
           IconButton(
             icon: Icon(Icons.logout),
@@ -42,11 +69,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _signOut() async {
-    await _auth.signOut();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
-    );
+    try {
+      await _auth.signOut();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error signing out: $e')),
+      );
+    }
   }
 
   BottomNavigationBar _buildBottomNavBar() {
@@ -96,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search Bar
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
@@ -111,7 +143,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Featured Restaurants
           _buildSectionHeader('Featured Restaurants'),
           _buildRestaurantList(
             query: _firestore.collection('restaurants')
@@ -119,11 +150,9 @@ class _HomeScreenState extends State<HomeScreen> {
               .limit(10)
           ),
 
-          // Food Categories
           _buildSectionHeader('Categories'),
           _buildCategoryGrid(),
 
-          // Nearby Restaurants
           _buildSectionHeader('Near You'),
           _buildRestaurantList(
             query: _firestore.collection('restaurants')
@@ -151,9 +180,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Expanded(
           child: _buildRestaurantList(
-            query: _firestore.collection('restaurants')
-              .where('name', isGreaterThanOrEqualTo: _searchQuery)
-              .where('name', isLessThan: _searchQuery + 'z')
+            query: _searchQuery.isNotEmpty
+              ? _firestore.collection('restaurants')
+                  .where('name', isGreaterThanOrEqualTo: _searchQuery)
+                  .where('name', isLessThan: _searchQuery + 'z')
+              : _firestore.collection('restaurants').limit(10)
           ),
         ),
       ],
@@ -163,16 +194,42 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFavoritesTab() {
     final userId = _firebaseAuth.currentUser?.uid;
     if (userId == null) {
-      return Center(child: Text('Please sign in to view favorites'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.favorite_border, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Please sign in to view favorites'),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                );
+              },
+              child: Text('Sign In'),
+            ),
+          ],
+        ),
+      );
     }
 
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('users').doc(userId).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return Center(child: CircularProgressIndicator());
+        }
         
-        List<dynamic> favorites = snapshot.data?['favorites'] ?? [];
-        
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final favorites = List<String>.from(data['favorites'] ?? []);
+
         if (favorites.isEmpty) {
           return Center(
             child: Column(
@@ -210,7 +267,12 @@ class _HomeScreenState extends State<HomeScreen> {
             Text('Guest User'),
             SizedBox(height: 8),
             ElevatedButton(
-              onPressed: _signOut,
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                );
+              },
               child: Text('Sign In'),
             ),
           ],
@@ -221,9 +283,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('users').doc(userId).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-        
-        var userData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading profile'));
+        }
+
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
         
         return SingleChildScrollView(
           padding: EdgeInsets.all(16),
@@ -231,20 +299,20 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               CircleAvatar(
                 radius: 50,
-                backgroundImage: userData['photoUrl'] != null 
-                    ? NetworkImage(userData['photoUrl'])
+                backgroundImage: data['photoUrl'] != null 
+                    ? NetworkImage(data['photoUrl'])
                     : null,
-                child: userData['photoUrl'] == null 
+                child: data['photoUrl'] == null 
                     ? Icon(Icons.person, size: 50)
                     : null,
               ),
               SizedBox(height: 16),
               Text(
-                userData['name'] ?? 'No Name',
+                data['name'] ?? 'No Name',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              Text(userData['email'] ?? ''),
+              Text(data['email'] ?? ''),
               SizedBox(height: 24),
               ListTile(
                 leading: Icon(Icons.history),
@@ -325,6 +393,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading restaurants'));
+        }
+
         if (!snapshot.hasData) {
           return Center(child: CircularProgressIndicator());
         }
@@ -339,27 +411,29 @@ class _HomeScreenState extends State<HomeScreen> {
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
             var restaurant = snapshot.data!.docs[index];
+            final data = restaurant.data() as Map<String, dynamic>? ?? {};
+            
             return Card(
               margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundImage: restaurant['imageUrl'] != null
-                      ? NetworkImage(restaurant['imageUrl'])
+                  backgroundImage: data['imageUrl'] != null
+                      ? NetworkImage(data['imageUrl'])
                       : null,
-                  child: restaurant['imageUrl'] == null
+                  child: data['imageUrl'] == null
                       ? Icon(Icons.restaurant)
                       : null,
                 ),
-                title: Text(restaurant['name']),
+                title: Text(data['name'] ?? 'Unknown'),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(restaurant['address'] ?? ''),
+                    Text(data['address'] ?? ''),
                     Row(
                       children: [
                         Icon(Icons.star, size: 16, color: Colors.orange),
-                        Text(' ${restaurant['rating']?.toStringAsFixed(1) ?? '0.0'}'),
-                        Text(' • ${restaurant['deliveryTime'] ?? '20-30'} min'),
+                        Text(' ${data['rating']?.toStringAsFixed(1) ?? '0.0'}'),
+                        Text(' • ${data['deliveryTime'] ?? '20-30'} min'),
                       ],
                     ),
                   ],
@@ -371,8 +445,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(
                       builder: (context) => RestaurantDetailScreen(
                         restaurantId: restaurant.id,
-                        restaurantName: restaurant['name'],
-                        restaurantImage: restaurant['imageUrl'],
+                        restaurantName: data['name'] ?? 'Unknown',
+                        restaurantImage: data['imageUrl'],
                       ),
                     ),
                   );
