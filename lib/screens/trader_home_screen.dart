@@ -311,69 +311,12 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     );
   }
 
-  Widget _buildCustomBarChart() {
-    double maxValue = _weeklySales.map((e) => e.amount).reduce((a, b) => a > b ? a : b).toDouble();
-    
-    return Column(
-      children: [
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: _weeklySales.map((data) {
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    children: [
-                      Text('\$${data.amount}', style: TextStyle(fontSize: 10)),
-                      SizedBox(height: 4),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
-                          ),
-                          height: (data.amount / maxValue) * 100,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: _weeklySales.map((data) {
-            return Text(data.day, style: TextStyle(fontSize: 12));
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 30, color: color),
-            SizedBox(height: 10),
-            Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-            Text(title, style: TextStyle(color: Colors.grey[600])),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMenuTab() {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Center(child: Text('Please sign in to manage menu'));
+    }
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
@@ -390,31 +333,59 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
             ],
           ),
           SizedBox(height: 16),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            itemCount: 5,
-            itemBuilder: (context, index) {
-              return Card(
-                margin: EdgeInsets.symmetric(vertical: 8),
-                child: ListTile(
-                  leading: CircleAvatar(child: Icon(Icons.fastfood)),
-                  title: Text('Menu Item ${index + 1}'),
-                  subtitle: Text('\$${(index + 5).toStringAsFixed(2)}'),
-                  trailing: PopupMenuButton(
-                    itemBuilder: (context) => [
-                      PopupMenuItem(child: Text('Edit'), value: 'edit'),
-                      PopupMenuItem(child: Text('Delete'), value: 'delete'),
-                    ],
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        // Implement edit
-                      } else if (value == 'delete') {
-                        // Implement delete
-                      }
-                    },
-                  ),
-                ),
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('restaurants')
+                .doc(user.uid)
+                .collection('menu')
+                .orderBy('createdAt')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text('Error: ${snapshot.error}');
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.data?.docs.isEmpty ?? true) {
+                return Padding(
+                  padding: EdgeInsets.only(top: 50),
+                  child: Text('No menu items yet. Add your first item!'),
+                );
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                itemCount: snapshot.data?.docs.length ?? 0,
+                itemBuilder: (context, index) {
+                  var item = snapshot.data!.docs[index];
+                  return Card(
+                    margin: EdgeInsets.symmetric(vertical: 8),
+                    child: ListTile(
+                      leading: item['imageUrl']?.isNotEmpty ?? false
+                          ? CircleAvatar(backgroundImage: NetworkImage(item['imageUrl']))
+                          : CircleAvatar(child: Icon(Icons.fastfood)),
+                      title: Text(item['name']),
+                      subtitle: Text('\$${item['price'].toStringAsFixed(2)} • ${item['category']}'),
+                      trailing: PopupMenuButton(
+                        itemBuilder: (context) => [
+                          PopupMenuItem(child: Text('Edit'), value: 'edit'),
+                          PopupMenuItem(child: Text('Delete'), value: 'delete'),
+                        ],
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _editMenuItem(item);
+                          } else if (value == 'delete') {
+                            _deleteMenuItem(item.id);
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -617,6 +588,68 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     );
   }
 
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 30, color: color),
+            SizedBox(height: 10),
+            Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+            Text(title, style: TextStyle(color: Colors.grey[600])),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomBarChart() {
+    double maxValue = _weeklySales.map((e) => e.amount).reduce((a, b) => a > b ? a : b).toDouble();
+    
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: _weeklySales.map((data) {
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    children: [
+                      Text('\$${data.amount}', style: TextStyle(fontSize: 10)),
+                      SizedBox(height: 4),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                          height: (data.amount / maxValue) * 100,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: _weeklySales.map((data) {
+            return Text(data.day, style: TextStyle(fontSize: 12));
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   void _showEditRestaurantDialog() {
     showDialog(
       context: context,
@@ -686,20 +719,20 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add Menu Item'),
+        title: Text(_editingItemId == null ? 'Add Menu Item' : 'Edit Menu Item'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _nameController,
-                decoration: InputDecoration(labelText: 'Name'),
+                decoration: InputDecoration(labelText: 'Name*'),
               ),
               SizedBox(height: 16),
               TextField(
                 controller: _priceController,
-                decoration: InputDecoration(labelText: 'Price'),
-                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: 'Price*'),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
               ),
               SizedBox(height: 16),
               TextField(
@@ -710,7 +743,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
               SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _category,
-                hint: Text('Select Category'),
+                hint: Text('Select Category*'),
                 items: ['Appetizer', 'Main Course', 'Dessert', 'Drink']
                     .map((category) => DropdownMenuItem(
                           value: category,
@@ -734,18 +767,127 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         actions: [
           TextButton(
             child: Text('Cancel'),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _clearMenuItemFields();
+              Navigator.pop(context);
+            },
           ),
           ElevatedButton(
             child: Text('Save'),
-            onPressed: () {
-              // Save logic here
-              Navigator.pop(context);
+            onPressed: () async {
+              if (_nameController.text.isEmpty ||
+                  _priceController.text.isEmpty ||
+                  _category == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please fill all required fields (*)')),
+                );
+                return;
+              }
+
+              try {
+                User? user = FirebaseAuth.instance.currentUser;
+                if (user == null) return;
+
+                double price = double.tryParse(_priceController.text) ?? 0.0;
+
+                if (_editingItemId == null) {
+                  // Add new item
+                  await _firestore
+                      .collection('restaurants')
+                      .doc(user.uid)
+                      .collection('menu')
+                      .add({
+                    'name': _nameController.text.trim(),
+                    'price': price,
+                    'description': _descriptionController.text.trim(),
+                    'category': _category,
+                    'imageUrl': _imageUrlController.text.trim(),
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+                } else {
+                  // Update existing item
+                  await _firestore
+                      .collection('restaurants')
+                      .doc(user.uid)
+                      .collection('menu')
+                      .doc(_editingItemId)
+                      .update({
+                    'name': _nameController.text.trim(),
+                    'price': price,
+                    'description': _descriptionController.text.trim(),
+                    'category': _category,
+                    'imageUrl': _imageUrlController.text.trim(),
+                  });
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Menu item saved successfully!')),
+                );
+                _clearMenuItemFields();
+                Navigator.pop(context);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error saving item: $e')),
+                );
+              }
             },
           ),
         ],
       ),
     );
+  }
+
+  void _editMenuItem(DocumentSnapshot item) {
+    _nameController.text = item['name'];
+    _priceController.text = item['price'].toString();
+    _descriptionController.text = item['description'] ?? '';
+    _imageUrlController.text = item['imageUrl'] ?? '';
+    _category = item['category'];
+    _editingItemId = item.id;
+
+    _showAddMenuItemDialog();
+  }
+
+  Future<void> _deleteMenuItem(String itemId) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete this menu item?'),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          TextButton(
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _firestore
+            .collection('restaurants')
+            .doc(user.uid)
+            .collection('menuItems')
+            .doc(itemId)
+            .delete();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Menu item deleted successfully')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting item: $e')),
+        );
+      }
+    }
   }
 
   void _showAddInventoryDialog() {
@@ -851,6 +993,15 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         ],
       ),
     );
+  }
+
+  void _clearMenuItemFields() {
+    _nameController.clear();
+    _priceController.clear();
+    _descriptionController.clear();
+    _imageUrlController.clear();
+    _category = null;
+    _editingItemId = null;
   }
 
   Color _getStatusColor(String status) {

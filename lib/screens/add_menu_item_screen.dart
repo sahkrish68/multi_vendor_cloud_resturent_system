@@ -45,7 +45,7 @@ class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
       await _firestore
           .collection('restaurants')
           .doc(widget.restaurantId)
-          .collection('menuItems')
+          .collection('menu')
           .add({
         'name': _name,
         'description': _description,
