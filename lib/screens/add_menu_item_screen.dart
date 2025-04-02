@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 class AddMenuItemScreen extends StatefulWidget {
   final String restaurantId;
@@ -20,7 +18,7 @@ class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
   String _description = '';
   double _price = 0.0;
   String _category = 'Main Course';
-  File? _image;
+  String _imageUrl = '';
   bool _isLoading = false;
 
   final List<String> _categories = [
@@ -31,20 +29,11 @@ class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
     'Side Dish'
   ];
 
-  Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-      });
-    }
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_image == null) {
+    if (_imageUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please select an image')),
+        SnackBar(content: Text('Please enter an image URL')),
       );
       return;
     }
@@ -53,9 +42,6 @@ class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
     _formKey.currentState!.save();
 
     try {
-      // In a real app, upload image to Firebase Storage and get URL
-      final imageUrl = 'https://via.placeholder.com/150';
-
       await _firestore
           .collection('restaurants')
           .doc(widget.restaurantId)
@@ -65,7 +51,7 @@ class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
         'description': _description,
         'price': _price,
         'category': _category,
-        'imageUrl': imageUrl,
+        'imageUrl': _imageUrl,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -94,16 +80,11 @@ class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
           key: _formKey,
           child: Column(
             children: [
-              GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 60,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage: _image != null ? FileImage(_image!) : null,
-                  child: _image == null 
-                      ? Icon(Icons.add_a_photo, size: 40)
-                      : null,
-                ),
+              SizedBox(height: 20),
+              TextFormField(
+                decoration: InputDecoration(labelText: 'Image URL'),
+                validator: (value) => value!.isEmpty ? 'Required' : null,
+                onSaved: (value) => _imageUrl = value!,
               ),
               SizedBox(height: 20),
               TextFormField(

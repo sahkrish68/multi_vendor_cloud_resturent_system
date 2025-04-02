@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 
@@ -17,25 +15,22 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   final AuthService _auth = AuthService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-  final ImagePicker _picker = ImagePicker();
   int _currentIndex = 0;
   
   // Menu Item Controllers
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _imageUrlController = TextEditingController();
   String? _category;
-  String? _imageUrl;
   String? _editingItemId;
-  File? _imageFile;
 
   // Restaurant Info
   final TextEditingController _restaurantNameController = TextEditingController();
   final TextEditingController _restaurantAddressController = TextEditingController();
   final TextEditingController _restaurantPhoneController = TextEditingController();
   final TextEditingController _restaurantDescriptionController = TextEditingController();
-  String? _restaurantImageUrl;
-  File? _restaurantImageFile;
+  final TextEditingController _restaurantImageUrlController = TextEditingController();
 
   // Inventory
   final TextEditingController _inventoryNameController = TextEditingController();
@@ -49,8 +44,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   final TextEditingController _staffEmailController = TextEditingController();
   final TextEditingController _staffPhoneController = TextEditingController();
   final TextEditingController _staffRoleController = TextEditingController();
-  String? _staffImageUrl;
-  File? _staffImageFile;
+  final TextEditingController _staffImageUrlController = TextEditingController();
   String? _editingStaffId;
 
   // Data
@@ -83,7 +77,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
           _restaurantAddressController.text = restaurantSnapshot['address'] ?? '';
           _restaurantPhoneController.text = restaurantSnapshot['phone'] ?? '';
           _restaurantDescriptionController.text = restaurantSnapshot['description'] ?? '';
-          _restaurantImageUrl = restaurantSnapshot['imageUrl'];
+          _restaurantImageUrlController.text = restaurantSnapshot['imageUrl'] ?? '';
         });
       }
     }
@@ -127,8 +121,8 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   Future<void> _loadStaff() async {
     setState(() {
       _staffMembers = [
-        {'id': '1', 'name': 'John Doe', 'role': 'Manager', 'email': 'john@example.com'},
-        {'id': '2', 'name': 'Jane Smith', 'role': 'Chef', 'email': 'jane@example.com'},
+        {'id': '1', 'name': 'John Doe', 'role': 'Manager', 'email': 'john@example.com', 'imageUrl': ''},
+        {'id': '2', 'name': 'Jane Smith', 'role': 'Chef', 'email': 'jane@example.com', 'imageUrl': ''},
       ];
     });
   }
@@ -200,21 +194,34 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                 children: [
                   Row(
                     children: [
-                      if (_restaurantImageUrl != null)
+                      if (_restaurantImageUrlController.text.isNotEmpty)
                         CircleAvatar(
                           radius: 40,
-                          backgroundImage: NetworkImage(_restaurantImageUrl!),
+                          backgroundImage: NetworkImage(_restaurantImageUrlController.text),
                         ),
                       SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _restaurantNameController.text.isNotEmpty 
-                                  ? _restaurantNameController.text 
-                                  : 'Your Restaurant',
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _restaurantNameController.text.isNotEmpty
+                                        ? _restaurantNameController.text
+                                        : 'Your Restaurant',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.edit),
+                                  onPressed: _showEditRestaurantDialog,
+                                ),
+                              ],
                             ),
                             SizedBox(height: 8),
                             if (_restaurantAddressController.text.isNotEmpty)
@@ -587,7 +594,11 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
               return Card(
                 margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
-                  leading: CircleAvatar(child: Icon(Icons.person)),
+                  leading: CircleAvatar(
+                    child: staff['imageUrl']?.isNotEmpty ?? false
+                        ? Image.network(staff['imageUrl'])
+                        : Icon(Icons.person),
+                  ),
                   title: Text(staff['name']),
                   subtitle: Text(staff['role']),
                   trailing: Row(
@@ -603,6 +614,71 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showEditRestaurantDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Restaurant Info'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _restaurantNameController,
+                decoration: InputDecoration(labelText: 'Restaurant Name'),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _restaurantAddressController,
+                decoration: InputDecoration(labelText: 'Address'),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _restaurantPhoneController,
+                decoration: InputDecoration(labelText: 'Phone'),
+                keyboardType: TextInputType.phone,
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _restaurantDescriptionController,
+                decoration: InputDecoration(labelText: 'Description'),
+                maxLines: 2,
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _restaurantImageUrlController,
+                decoration: InputDecoration(labelText: 'Image URL'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Save'),
+            onPressed: () async {
+              User? user = FirebaseAuth.instance.currentUser;
+              if (user != null) {
+                await _firestore.collection('restaurants').doc(user.uid).set({
+                  'name': _restaurantNameController.text.trim(),
+                  'address': _restaurantAddressController.text.trim(),
+                  'phone': _restaurantPhoneController.text.trim(),
+                  'description': _restaurantDescriptionController.text.trim(),
+                  'imageUrl': _restaurantImageUrlController.text.trim(),
+                }, SetOptions(merge: true));
+              }
+              Navigator.pop(context);
+              setState(() {}); // Refresh dashboard with updated info
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -648,14 +724,9 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                 },
               ),
               SizedBox(height: 16),
-              _imageFile != null
-                  ? Image.file(_imageFile!, height: 100)
-                  : _imageUrl != null
-                      ? Image.network(_imageUrl!, height: 100)
-                      : Container(),
-              ElevatedButton(
-                onPressed: _pickImage,
-                child: Text('Select Image'),
+              TextField(
+                controller: _imageUrlController,
+                decoration: InputDecoration(labelText: 'Image URL'),
               ),
             ],
           ),
@@ -675,15 +746,6 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _imageFile = File(pickedFile.path);
-      });
-    }
   }
 
   void _showAddInventoryDialog() {
@@ -767,14 +829,9 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                 decoration: InputDecoration(labelText: 'Role'),
               ),
               SizedBox(height: 16),
-              _staffImageFile != null
-                  ? Image.file(_staffImageFile!, height: 100)
-                  : _staffImageUrl != null
-                      ? Image.network(_staffImageUrl!, height: 100)
-                      : Container(),
-              ElevatedButton(
-                onPressed: _pickStaffImage,
-                child: Text('Select Image'),
+              TextField(
+                controller: _staffImageUrlController,
+                decoration: InputDecoration(labelText: 'Image URL'),
               ),
             ],
           ),
@@ -796,15 +853,6 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     );
   }
 
-  Future<void> _pickStaffImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _staffImageFile = File(pickedFile.path);
-      });
-    }
-  }
-
   Color _getStatusColor(String status) {
     switch (status) {
       case 'pending': return Colors.orange;
@@ -820,10 +868,12 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
+    _imageUrlController.dispose();
     _restaurantNameController.dispose();
     _restaurantAddressController.dispose();
     _restaurantPhoneController.dispose();
     _restaurantDescriptionController.dispose();
+    _restaurantImageUrlController.dispose();
     _inventoryNameController.dispose();
     _inventoryQuantityController.dispose();
     _inventoryUnitController.dispose();
@@ -832,6 +882,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     _staffEmailController.dispose();
     _staffPhoneController.dispose();
     _staffRoleController.dispose();
+    _staffImageUrlController.dispose();
     super.dispose();
   }
 }

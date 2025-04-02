@@ -143,13 +143,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          _buildSectionHeader('Featured Restaurants'),
+          _buildSectionHeader('All Restaurants'),
           _buildRestaurantList(
-            query: _firestore.collection('restaurants')
-              .where('isFeatured', isEqualTo: true)
-              .limit(10)
+           query: _firestore.collection('restaurants').limit(20),
           ),
 
+          
           _buildSectionHeader('Categories'),
           _buildCategoryGrid(),
 

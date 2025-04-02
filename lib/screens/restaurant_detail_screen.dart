@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RestaurantDetailScreen extends StatefulWidget {
   final String restaurantId;
@@ -18,6 +19,43 @@ class RestaurantDetailScreen extends StatefulWidget {
 
 class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<void> _addToCart(Map<String, dynamic> itemData) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final cartRef = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('cart')
+        .doc(itemData['id']);
+
+    final cartItem = await cartRef.get();
+
+    if (cartItem.exists) {
+      // If already in cart, increase quantity
+      await cartRef.update({
+        'quantity': FieldValue.increment(1),
+      });
+    } else {
+      // Add new item to cart
+      await cartRef.set({
+        'id': itemData['id'],
+        'name': itemData['name'],
+        'price': itemData['price'],
+        'imageUrl': itemData['imageUrl'],
+        'restaurantId': widget.restaurantId,
+        'restaurantName': widget.restaurantName,
+        'quantity': 1,
+        'addedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${itemData['name']} added to cart')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +93,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
-                  // Add more restaurant details here as needed
+                  // You can display other restaurant details here
                 ],
               ),
             ),
@@ -78,7 +116,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                 if (!snapshot.hasData) {
                   return Center(child: CircularProgressIndicator());
                 }
-                
+
                 if (snapshot.data!.docs.isEmpty) {
                   return Center(child: Text('No menu items available'));
                 }
@@ -89,12 +127,14 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                   itemCount: snapshot.data!.docs.length,
                   itemBuilder: (context, index) {
                     var menuItem = snapshot.data!.docs[index];
+                    final data = menuItem.data() as Map<String, dynamic>;
+
                     return Card(
                       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ListTile(
-                        leading: menuItem['imageUrl'] != null
+                        leading: data['imageUrl'] != null
                             ? Image.network(
-                                menuItem['imageUrl'],
+                                data['imageUrl'],
                                 width: 60,
                                 height: 60,
                                 fit: BoxFit.cover,
@@ -105,9 +145,9 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                                 color: Colors.grey[200],
                                 child: Icon(Icons.fastfood),
                               ),
-                        title: Text(menuItem['name']),
+                        title: Text(data['name'] ?? 'Unnamed'),
                         subtitle: Text(
-                          '\$${menuItem['price']?.toStringAsFixed(2) ?? '0.00'}',
+                          '\$${data['price']?.toStringAsFixed(2) ?? '0.00'}',
                           style: TextStyle(
                             color: Colors.green,
                             fontWeight: FontWeight.bold,
@@ -116,7 +156,12 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                         trailing: IconButton(
                           icon: Icon(Icons.add_shopping_cart),
                           onPressed: () {
-                            // Add to cart functionality
+                            _addToCart({
+                              'id': menuItem.id,
+                              'name': data['name'],
+                              'price': data['price'],
+                              'imageUrl': data['imageUrl'],
+                            });
                           },
                         ),
                       ),

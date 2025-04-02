@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
-import 'restaurant_detail_screen.dart';
 
 class CartScreen extends StatefulWidget {
   @override
@@ -29,10 +28,10 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ],
       ),
-      body: userId == null 
+      body: userId == null
           ? _buildGuestView()
           : _buildCartItems(userId),
-      bottomNavigationBar: _buildCheckoutBar(),
+      bottomNavigationBar: _buildCheckoutBar(userId),
     );
   }
 
@@ -60,17 +59,14 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCartItems(String userId) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('users').doc(userId).snapshots(),
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('users').doc(userId).collection('cart').snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
         }
 
-        var userData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-        List<dynamic> cartItems = userData['cart'] ?? [];
-
-        if (cartItems.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -80,9 +76,7 @@ class _CartScreenState extends State<CartScreen> {
                 Text('Your cart is empty'),
                 SizedBox(height: 8),
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: () => Navigator.pop(context),
                   child: Text('Browse restaurants'),
                 ),
               ],
@@ -90,11 +84,13 @@ class _CartScreenState extends State<CartScreen> {
           );
         }
 
+        final cartItems = snapshot.data!.docs;
+
         return ListView.builder(
           padding: EdgeInsets.all(16),
           itemCount: cartItems.length,
           itemBuilder: (context, index) {
-            var item = cartItems[index] as Map<String, dynamic>;
+            var item = cartItems[index].data() as Map<String, dynamic>;
             return Card(
               margin: EdgeInsets.only(bottom: 16),
               child: Padding(
@@ -104,14 +100,19 @@ class _CartScreenState extends State<CartScreen> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        item['imageUrl'] ?? '',
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => 
-                          Container(width: 80, height: 80, color: Colors.grey[200]),
-                      ),
+                      child: item['imageUrl'] != null
+                          ? Image.network(
+                              item['imageUrl'],
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              width: 80,
+                              height: 80,
+                              color: Colors.grey[200],
+                              child: Icon(Icons.fastfood),
+                            ),
                     ),
                     SizedBox(width: 16),
                     Expanded(
@@ -145,19 +146,13 @@ class _CartScreenState extends State<CartScreen> {
                                     IconButton(
                                       icon: Icon(Icons.remove, size: 18),
                                       onPressed: () => _updateItemQuantity(
-                                        userId, 
-                                        item['id'], 
-                                        -1,
-                                      ),
+                                          userId, cartItems[index].id, -1),
                                     ),
-                                    Text(item['quantity'].toString()),
+                                    Text('${item['quantity'] ?? 1}'),
                                     IconButton(
                                       icon: Icon(Icons.add, size: 18),
                                       onPressed: () => _updateItemQuantity(
-                                        userId, 
-                                        item['id'], 
-                                        1,
-                                      ),
+                                          userId, cartItems[index].id, 1),
                                     ),
                                   ],
                                 ),
@@ -177,7 +172,9 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCheckoutBar() {
+  Widget _buildCheckoutBar(String? userId) {
+    if (userId == null) return SizedBox.shrink();
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -190,29 +187,21 @@ class _CartScreenState extends State<CartScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Total',
-                style: TextStyle(color: Colors.grey),
-              ),
-              StreamBuilder<DocumentSnapshot>(
-                stream: _firestore.collection('users').doc(_firebaseAuth.currentUser?.uid).snapshots(),
+              Text('Total', style: TextStyle(color: Colors.grey)),
+              StreamBuilder<QuerySnapshot>(
+                stream: _firestore.collection('users').doc(userId).collection('cart').snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return Text('\$0.00');
-                  
-                  var userData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-                  List<dynamic> cartItems = userData['cart'] ?? [];
-                  
+
                   double total = 0;
-                  for (var item in cartItems) {
+                  for (var doc in snapshot.data!.docs) {
+                    final item = doc.data() as Map<String, dynamic>;
                     total += (item['price'] ?? 0) * (item['quantity'] ?? 1);
                   }
-                  
+
                   return Text(
                     '\$${total.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   );
                 },
               ),
@@ -221,7 +210,7 @@ class _CartScreenState extends State<CartScreen> {
           Spacer(),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,  // Changed from 'primary' to 'backgroundColor'
+              backgroundColor: Colors.orange,
               padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             ),
             onPressed: () {
@@ -237,28 +226,18 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _updateItemQuantity(String userId, String itemId, int change) async {
-    try {
-      final userRef = _firestore.collection('users').doc(userId);
-      final doc = await userRef.get();
-      
-      List<dynamic> cartItems = doc.data()?['cart'] ?? [];
-      int itemIndex = cartItems.indexWhere((item) => item['id'] == itemId);
-      
-      if (itemIndex != -1) {
-        int newQuantity = (cartItems[itemIndex]['quantity'] ?? 1) + change;
-        
-        if (newQuantity <= 0) {
-          cartItems.removeAt(itemIndex);
-        } else {
-          cartItems[itemIndex]['quantity'] = newQuantity;
-        }
-        
-        await userRef.update({'cart': cartItems});
+    final itemRef = _firestore.collection('users').doc(userId).collection('cart').doc(itemId);
+    final doc = await itemRef.get();
+
+    if (doc.exists) {
+      final currentQty = doc['quantity'] ?? 1;
+      final newQty = currentQty + change;
+
+      if (newQty <= 0) {
+        await itemRef.delete();
+      } else {
+        await itemRef.update({'quantity': newQty});
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update quantity: $e')),
-      );
     }
   }
 
