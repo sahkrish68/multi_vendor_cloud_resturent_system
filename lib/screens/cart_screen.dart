@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:multi_vendor_cloud_resturent_system/screens/checkout_screen.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 
@@ -173,57 +174,59 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCheckoutBar(String? userId) {
-    if (userId == null) return SizedBox.shrink();
+  if (userId == null) return SizedBox.shrink();
 
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey[200]!)),
-      ),
-      child: Row(
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Total', style: TextStyle(color: Colors.grey)),
-              StreamBuilder<QuerySnapshot>(
-                stream: _firestore.collection('users').doc(userId).collection('cart').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return Text('\$0.00');
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border(top: BorderSide(color: Colors.grey[200]!)),
+    ),
+    child: Row(
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Total', style: TextStyle(color: Colors.grey)),
+            StreamBuilder<QuerySnapshot>(
+              stream: _firestore.collection('users').doc(userId).collection('cart').snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return Text('\$0.00');
 
-                  double total = 0;
-                  for (var doc in snapshot.data!.docs) {
-                    final item = doc.data() as Map<String, dynamic>;
-                    total += (item['price'] ?? 0) * (item['quantity'] ?? 1);
-                  }
+                double total = 0;
+                for (var doc in snapshot.data!.docs) {
+                  final item = doc.data() as Map<String, dynamic>;
+                  total += (item['price'] ?? 0) * (item['quantity'] ?? 1);
+                }
 
-                  return Text(
-                    '\$${total.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  );
-                },
-              ),
-            ],
-          ),
-          Spacer(),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                return Text(
+                  '\$${total.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                );
+              },
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Checkout functionality will be implemented here')),
-              );
-            },
-            child: Text('Checkout'),
+          ],
+        ),
+        Spacer(),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           ),
-        ],
-      ),
-    );
-  }
+          onPressed: () {
+            // Add navigation to CheckoutScreen here
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => CheckoutScreen()),
+            );
+          },
+          child: Text('Checkout'),
+        ),
+      ],
+    ),
+  );
+}
 
   Future<void> _updateItemQuantity(String userId, String itemId, int change) async {
     final itemRef = _firestore.collection('users').doc(userId).collection('cart').doc(itemId);
