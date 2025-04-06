@@ -17,42 +17,37 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   int _currentIndex = 0;
   
-  // Menu Item Controllers
+  // Controllers
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
-  String? _category;
-  String? _editingItemId;
-
-  // Restaurant Info
   final TextEditingController _restaurantNameController = TextEditingController();
   final TextEditingController _restaurantAddressController = TextEditingController();
   final TextEditingController _restaurantPhoneController = TextEditingController();
   final TextEditingController _restaurantDescriptionController = TextEditingController();
   final TextEditingController _restaurantImageUrlController = TextEditingController();
-
-  // Inventory
   final TextEditingController _inventoryNameController = TextEditingController();
   final TextEditingController _inventoryQuantityController = TextEditingController();
   final TextEditingController _inventoryUnitController = TextEditingController();
   final TextEditingController _inventoryThresholdController = TextEditingController();
-  String? _editingInventoryId;
-
-  // Staff
   final TextEditingController _staffNameController = TextEditingController();
   final TextEditingController _staffEmailController = TextEditingController();
   final TextEditingController _staffPhoneController = TextEditingController();
   final TextEditingController _staffRoleController = TextEditingController();
   final TextEditingController _staffImageUrlController = TextEditingController();
-  String? _editingStaffId;
 
-  // Data
+  // State variables
+  String? _category;
+  String? _editingItemId;
+  String? _editingInventoryId;
+  String? _editingStaffId;
   List<SalesData> _weeklySales = [];
   List<PopularItem> _popularItems = [];
   List<Map<String, dynamic>> _inventory = [];
   List<Map<String, dynamic>> _staffMembers = [];
   bool _isLoadingStats = true;
+  List<DocumentSnapshot> _orders = [];
 
   @override
   void initState() {
@@ -61,6 +56,43 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     _loadStatistics();
     _loadInventory();
     _loadStaff();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      QuerySnapshot orderSnapshot = await _firestore
+          .collection('orders')
+          .where('restaurantId', isEqualTo: user.uid)
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      setState(() {
+        _orders = orderSnapshot.docs;
+      });
+    } catch (e) {
+      print("Error loading orders: $e");
+    }
+  }
+
+  Future<void> _updateOrderStatus(String orderId, String newStatus) async {
+    try {
+      await _firestore.collection('orders').doc(orderId).update({
+        'status': newStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      await _loadOrders(); // Refresh orders after update
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Order status updated to $newStatus')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating order: $e')),
+      );
+    }
   }
 
   Future<void> _loadRestaurantInfo() async {
@@ -184,9 +216,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         children: [
           Card(
             elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -271,9 +301,9 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
             children: [
-              _buildStatCard('Today\'s Orders', '12', Icons.shopping_bag, Colors.blue),
-              _buildStatCard('Pending Orders', '5', Icons.access_time, Colors.orange),
-              _buildStatCard('Total Revenue', '\$450', Icons.attach_money, Colors.green),
+              _buildStatCard('Today\'s Orders', '${_orders.length}', Icons.shopping_bag, Colors.blue),
+              _buildStatCard('Pending Orders', '${_orders.where((o) => o['status'] == 'pending').length}', Icons.access_time, Colors.orange),
+              _buildStatCard('Total Revenue', '\$${_orders.fold(0.0, (sum, o) => sum + (o['total'] ?? 0.0)).toStringAsFixed(2)}', Icons.attach_money, Colors.green),
               _buildStatCard('Menu Items', '24', Icons.restaurant, Colors.purple),
             ],
           ),
@@ -428,15 +458,30 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
   }
 
   Widget _buildOrderList(String status) {
+    final filteredOrders = _orders.where((order) => order['status'] == status).toList();
+    
+    if (filteredOrders.isEmpty) {
+      return Center(child: Text('No $status orders'));
+    }
+
     return ListView.builder(
       padding: EdgeInsets.all(16),
-      itemCount: 3,
+      itemCount: filteredOrders.length,
       itemBuilder: (context, index) {
+        final order = filteredOrders[index];
+        final orderData = order.data() as Map<String, dynamic>;
+        final items = orderData['items'] as List<dynamic>? ?? [];
+        final customer = orderData['customer'] as Map<String, dynamic>? ?? {};
+        final createdAt = orderData['createdAt']?.toDate() ?? DateTime.now();
+
         return Card(
           margin: EdgeInsets.only(bottom: 16),
           child: ExpansionTile(
-            title: Text('Order #${1000 + index}'),
-            subtitle: Text('\$${(index + 1) * 15}.00 • ${DateFormat('MMM d, h:mm a').format(DateTime.now().subtract(Duration(hours: index)))}'),
+            title: Text('Order #${order.id.substring(0, 8)}'),
+            subtitle: Text(
+              '\$${orderData['total']?.toStringAsFixed(2) ?? '0.00'} • '
+              '${DateFormat('MMM d, h:mm a').format(createdAt)}'
+            ),
             trailing: Chip(
               label: Text(status.toUpperCase(), style: TextStyle(color: Colors.white)),
               backgroundColor: _getStatusColor(status),
@@ -446,46 +491,24 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
                   children: [
-                    ListTile(
+                    ...items.map((item) => ListTile(
                       leading: Icon(Icons.fastfood),
-                      title: Text('Item ${index + 1}'),
-                      subtitle: Text('\$${(index + 1) * 5}.00'),
-                      trailing: Text('x${index + 1}'),
-                    ),
+                      title: Text(item['name'] ?? 'Unknown Item'),
+                      subtitle: Text('\$${item['price']?.toStringAsFixed(2) ?? '0.00'}'),
+                      trailing: Text('x${item['quantity'] ?? '1'}'),
+                    )).toList(),
                     Divider(),
                     ListTile(
-                      title: Text('Customer: John Doe'),
-                      subtitle: Text('Phone: +1234567890'),
+                      title: Text('Customer: ${customer['name'] ?? 'Unknown'}'),
+                      subtitle: Text('Phone: ${customer['phone'] ?? 'Not provided'}'),
                     ),
-                    if (status == 'pending' || status == 'preparing' || status == 'ready')
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            if (status == 'pending')
-                              ElevatedButton(
-                                child: Text('Accept'),
-                                onPressed: () {},
-                              ),
-                            if (status == 'preparing')
-                              ElevatedButton(
-                                child: Text('Mark Ready'),
-                                onPressed: () {},
-                              ),
-                            if (status == 'ready')
-                              ElevatedButton(
-                                child: Text('Mark Delivered'),
-                                onPressed: () {},
-                              ),
-                            if (status != 'ready')
-                              OutlinedButton(
-                                child: Text('Cancel'),
-                                onPressed: () {},
-                              ),
-                          ],
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: _buildOrderActionButtons(status, order.id),
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -494,6 +517,42 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         );
       },
     );
+  }
+
+  List<Widget> _buildOrderActionButtons(String status, String orderId) {
+    switch (status) {
+      case 'pending':
+        return [
+          ElevatedButton(
+            child: Text('Accept Order'),
+            onPressed: () => _updateOrderStatus(orderId, 'preparing'),
+          ),
+          OutlinedButton(
+            child: Text('Reject'),
+            onPressed: () => _updateOrderStatus(orderId, 'rejected'),
+          ),
+        ];
+      case 'preparing':
+        return [
+          ElevatedButton(
+            child: Text('Mark Ready'),
+            onPressed: () => _updateOrderStatus(orderId, 'ready'),
+          ),
+          OutlinedButton(
+            child: Text('Cancel'),
+            onPressed: () => _updateOrderStatus(orderId, 'cancelled'),
+          ),
+        ];
+      case 'ready':
+        return [
+          ElevatedButton(
+            child: Text('Mark Delivered'),
+            onPressed: () => _updateOrderStatus(orderId, 'completed'),
+          ),
+        ];
+      default:
+        return [];
+    }
   }
 
   Widget _buildInventoryTab() {
@@ -875,7 +934,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
         await _firestore
             .collection('restaurants')
             .doc(user.uid)
-            .collection('menuItems')
+            .collection('menu')
             .doc(itemId)
             .delete();
 
@@ -1010,6 +1069,8 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
       case 'preparing': return Colors.blue;
       case 'ready': return Colors.green;
       case 'completed': return Colors.purple;
+      case 'rejected': return Colors.red;
+      case 'cancelled': return Colors.grey;
       default: return Colors.grey;
     }
   }

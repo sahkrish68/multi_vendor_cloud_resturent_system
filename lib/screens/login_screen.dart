@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 import 'trader_home_screen.dart';
+import 'admin/admin_dashboard.dart'; // Add this import
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -44,22 +45,41 @@ class _LoginScreenState extends State<LoginScreen> {
       User? user = await _auth.login(email, password, isTrader: isTrader);
 
       if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection(isTrader ? 'traders' : 'users')
-            .doc(user.uid)
-            .get();
+        // Check if user is admin first
+        bool adminStatus = await _auth.isAdmin();
 
+        if (adminStatus) {
+          // Redirect to admin dashboard
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => AdminDashboard()),
+          );
+          return;
+        }
+
+        // Check if trader
         if (isTrader) {
-          if (userDoc.exists && userDoc['isApproved'] == true) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => TraderHomeScreen()),
-            );
+          DocumentSnapshot traderDoc = await FirebaseFirestore.instance
+              .collection('traders')
+              .doc(user.uid)
+              .get();
+
+          if (traderDoc.exists) {
+            if (traderDoc['isApproved'] == true) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => TraderHomeScreen()),
+              );
+            } else {
+              await _auth.signOut();
+              setState(() => _errorMessage = 'Account pending admin approval');
+            }
           } else {
             await _auth.signOut();
-            setState(() => _errorMessage = 'Account pending admin approval');
+            setState(() => _errorMessage = 'Trader account not found');
           }
         } else {
+          // Regular user
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => HomeScreen()),
