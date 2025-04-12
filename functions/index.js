@@ -1,16 +1,24 @@
 const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+const nodemailer = require("nodemailer");
 
-admin.initializeApp();
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "productionproject962@gmail.com",
+    pass: "pp@123456" // Use app password here
+  },
+});
 
-exports.setAdminRole = functions.https.onCall(async (data, context) => {
-  const uid = data.uid;
+exports.sendOtpEmail = functions.https.onCall(async (data, context) => {
+  const { email, otp } = data;
 
-  if (!uid) {
-    throw new functions.https.HttpsError("invalid-argument", "User ID is required");
-  }
+  const mailOptions = {
+    from: "Khau <productionproject962@gmail.com>",
+    to: email,
+    subject: "Your OTP Code",
+    text: `Your OTP is: ${otp}`,
+  };
 
-  await admin.auth().setCustomUserClaims(uid, { usertype: "admin" });
-
-  return { message: `✅ Admin role set for UID: ${uid}` };
+  await transporter.sendMail(mailOptions);
+  return { success: true };
 });

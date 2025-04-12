@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import 'otp_verification_screen.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -82,17 +83,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       if (user != null) {
-        Navigator.pushReplacement(
+        // Navigate to OTP verification screen
+        bool verified = await Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isTrader
-                ? 'Trader account created! Waiting for admin approval'
-                : 'Registration successful!'),
+          MaterialPageRoute(
+            builder: (_) => OtpVerificationScreen(email: email),
           ),
         );
+
+        if (verified == true) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => LoginScreen()),
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('OTP verified. You can now log in.')),
+          );
+        } else {
+          await _auth.signOut();
+          setState(() => _errorMessage = 'OTP verification required');
+        }
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _errorMessage = e.message);
@@ -237,6 +248,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 validator: (val) => val!.isEmpty ? 'Confirm your password' : null,
               ),
               SizedBox(height: 15),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               ElevatedButton(
                 onPressed: isLoading ? null : _handleRegistration,
                 child: isLoading 
