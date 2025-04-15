@@ -6,6 +6,8 @@ import 'login_screen.dart';
 import 'restaurant_detail_screen.dart';
 import 'cart_screen.dart';
 import 'order_confirmation_screen.dart';
+import 'category_restaurants_screen.dart';
+
 
 
 class HomeScreen extends StatefulWidget {
@@ -48,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: _currentIndex == 0 
-            ? Text('Food Delivery')
+            ? Text('Khauu App')
             : Text('Search Restaurants'),
         actions: [
           if (_currentIndex == 0)
@@ -354,13 +356,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildCategoryGrid() {
     List<Map<String, dynamic>> categories = [
+      {'name': 'Appetizer', 'icon': Icons.restaurant_menu},
+      {'name': 'Main Course', 'icon': Icons.rice_bowl},
+      {'name': 'Dessert', 'icon': Icons.cake},
+      {'name': 'Drink', 'icon': Icons.local_drink},
+      {'name': 'Sushi', 'icon': Icons.set_meal},
       {'name': 'Pizza', 'icon': Icons.local_pizza},
       {'name': 'Burger', 'icon': Icons.fastfood},
-      {'name': 'Sushi', 'icon': Icons.set_meal},
-      {'name': 'Pasta', 'icon': Icons.restaurant},
-      {'name': 'Salad', 'icon': Icons.eco},
-      {'name': 'Dessert', 'icon': Icons.cake},
-      {'name': 'Drinks', 'icon': Icons.local_drink},
       {'name': 'View All', 'icon': Icons.more_horiz},
     ];
 
@@ -375,7 +377,17 @@ class _HomeScreenState extends State<HomeScreen> {
       itemBuilder: (context, index) {
         return Card(
           child: InkWell(
-            onTap: () {},
+            onTap: () {
+              String categoryName = categories[index]['name'];
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CategoryRestaurantsScreen(
+                    category: categoryName,
+                  ),
+                ),
+              );
+            },
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

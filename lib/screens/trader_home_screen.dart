@@ -803,7 +803,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
               DropdownButtonFormField<String>(
                 value: _category,
                 hint: Text('Select Category*'),
-                items: ['Appetizer', 'Main Course', 'Dessert', 'Drink']
+                items: ['Appetizer', 'Main Course', 'Dessert', 'Drink','Sushi','Pizza','Burger']
                     .map((category) => DropdownMenuItem(
                           value: category,
                           child: Text(category),
@@ -849,35 +849,43 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
 
                 double price = double.tryParse(_priceController.text) ?? 0.0;
 
-                if (_editingItemId == null) {
-                  // Add new item
-                  await _firestore
-                      .collection('restaurants')
-                      .doc(user.uid)
-                      .collection('menu')
-                      .add({
-                    'name': _nameController.text.trim(),
-                    'price': price,
-                    'description': _descriptionController.text.trim(),
-                    'category': _category,
-                    'imageUrl': _imageUrlController.text.trim(),
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-                } else {
-                  // Update existing item
-                  await _firestore
-                      .collection('restaurants')
-                      .doc(user.uid)
-                      .collection('menu')
-                      .doc(_editingItemId)
-                      .update({
-                    'name': _nameController.text.trim(),
-                    'price': price,
-                    'description': _descriptionController.text.trim(),
-                    'category': _category,
-                    'imageUrl': _imageUrlController.text.trim(),
-                  });
-                }
+if (_editingItemId == null) {
+  // Add new item
+  await _firestore
+      .collection('restaurants')
+      .doc(user.uid)
+      .collection('menu')
+      .add({
+    'name': _nameController.text.trim(),
+    'price': price,
+    'description': _descriptionController.text.trim(),
+    'category': _category,
+    'imageUrl': _imageUrlController.text.trim(),
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+} else {
+  // Update existing item
+  await _firestore
+      .collection('restaurants')
+      .doc(user.uid)
+      .collection('menu')
+      .doc(_editingItemId)
+      .update({
+    'name': _nameController.text.trim(),
+    'price': price,
+    'description': _descriptionController.text.trim(),
+    'category': _category,
+    'imageUrl': _imageUrlController.text.trim(),
+  });
+}
+if (_category != null) {
+  await _firestore
+      .collection('restaurants')
+      .doc(user.uid)
+      .set({
+    'categories': FieldValue.arrayUnion([_category!.toLowerCase()])
+  }, SetOptions(merge: true));
+}
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Menu item saved successfully!')),
