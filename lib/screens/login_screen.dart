@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 import 'trader_home_screen.dart';
-import 'admin/admin_dashboard.dart'; // Add this import
+import 'admin/admin_dashboard.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   bool isTrader = false;
   bool isLoading = false;
   bool _obscurePassword = true;
@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() {
       isLoading = true;
       _errorMessage = null;
@@ -41,15 +41,13 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
-      
+
       User? user = await _auth.login(email, password, isTrader: isTrader);
 
       if (user != null) {
-        // Check if user is admin first
         bool adminStatus = await _auth.isAdmin();
 
         if (adminStatus) {
-          // Redirect to admin dashboard
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => AdminDashboard()),
@@ -57,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
-        // Check if trader
         if (isTrader) {
           DocumentSnapshot traderDoc = await FirebaseFirestore.instance
               .collection('traders')
@@ -79,7 +76,6 @@ class _LoginScreenState extends State<LoginScreen> {
             setState(() => _errorMessage = 'Trader account not found');
           }
         } else {
-          // Regular user
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => HomeScreen()),
@@ -115,87 +111,117 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              SizedBox(height: 20),
-              Text(
-                isTrader ? 'Trader Login' : 'User Login',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 30),
-              SwitchListTile(
-                title: Text('Login as Trader'),
-                value: isTrader,
-                onChanged: isLoading ? null : (value) => setState(() => isTrader = value),
-              ),
-              SizedBox(height: 20),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
+      backgroundColor: Color(0xFFFFF2E6), // Light background to match splash
+      body: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                Image.asset(
+                  'assets/images/khauu_logo.png',
+                  width: 120,
                 ),
-                keyboardType: TextInputType.emailAddress,
-                validator: (val) => val!.isEmpty ? 'Enter your email' : null,
-              ),
-              SizedBox(height: 15),
-              TextFormField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                SizedBox(height: 20),
+                Text(
+                  isTrader ? 'Trader Login' : 'User Login',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4A2C2A),
                   ),
                 ),
-                obscureText: _obscurePassword,
-                validator: (val) => val!.length < 6 ? 'Minimum 6 characters' : null,
-              ),
-              SizedBox(height: 20),
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
+                SizedBox(height: 30),
+                SwitchListTile(
+                  value: isTrader,
+                  onChanged: isLoading ? null : (val) => setState(() => isTrader = val),
+                  title: Text(
+                    'Login as Trader',
+                    style: TextStyle(color: Color(0xFF4A2C2A)),
+                  ),
+                  activeColor: Color(0xFF4A2C2A),
+                ),
+                SizedBox(height: 15),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: _inputDecoration('Email', Icons.email),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (val) => val!.isEmpty ? 'Enter your email' : null,
+                ),
+                SizedBox(height: 15),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: _inputDecoration('Password', Icons.lock).copyWith(
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                        color: Color(0xFF4A2C2A),
+                      ),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  obscureText: _obscurePassword,
+                  validator: (val) => val!.length < 6 ? 'Minimum 6 characters' : null,
+                ),
+                SizedBox(height: 20),
+                if (_errorMessage != null)
+                  Text(
                     _errorMessage!,
-                    style: TextStyle(color: Colors.red, fontSize: 14),
+                    style: TextStyle(color: Colors.redAccent, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
+                SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: isLoading ? null : _handleLogin,
+                  child: isLoading
+                      ? CircularProgressIndicator(color: Colors.white)
+                      : Text('LOGIN'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 48),
+                    backgroundColor: Color(0xFF4A2C2A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 ),
-              ElevatedButton(
-                onPressed: isLoading ? null : _handleLogin,
-                child: isLoading 
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(color: Colors.white),
-                      )
-                    : Text('LOGIN'),
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 15),
+                SizedBox(height: 12),
+                TextButton(
+                  onPressed: isLoading
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => RegisterScreen()),
+                          ),
+                  child: Text(
+                    'Create new account',
+                    style: TextStyle(color: Color(0xFF4A2C2A)),
+                  ),
                 ),
-              ),
-              TextButton(
-                onPressed: isLoading 
-                    ? null 
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => RegisterScreen()),
-                        ),
-                child: Text('Create new account'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Color(0xFF4A2C2A)),
+      prefixIcon: Icon(icon, color: Color(0xFF4A2C2A)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: Color(0xFF4A2C2A).withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: Color(0xFF4A2C2A)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      filled: true,
+      fillColor: Colors.white,
     );
   }
 }

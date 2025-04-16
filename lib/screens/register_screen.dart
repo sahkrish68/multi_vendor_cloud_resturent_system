@@ -20,7 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _businessNameController = TextEditingController();
   final _addressController = TextEditingController();
   final _businessTypeController = TextEditingController();
-  
+
   bool isTrader = false;
   bool isLoading = false;
   bool _obscurePassword = true;
@@ -56,7 +56,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
       final phone = _phoneController.text.trim();
-
       User? user;
 
       if (isTrader) {
@@ -83,7 +82,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       if (user != null) {
-        // Navigate to OTP verification screen
         bool verified = await Navigator.push(
           context,
           MaterialPageRoute(
@@ -96,7 +94,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             context,
             MaterialPageRoute(builder: (_) => LoginScreen()),
           );
-
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('OTP verified. You can now log in.')),
           );
@@ -117,149 +114,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Register')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      backgroundColor: Color(0xFFFFF2E6),
+      appBar: AppBar(
+        backgroundColor: Color(0xFF4A2C2A),
+        title: Text('Register'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: Column(
             children: [
-              SizedBox(height: 20),
+              SizedBox(height: 10),
               Text(
                 isTrader ? 'Trader Registration' : 'User Registration',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4A2C2A),
+                ),
               ),
-              SizedBox(height: 30),
+              SizedBox(height: 25),
               SwitchListTile(
-                title: Text('Register as Trader'),
+                title: Text('Register as Trader', style: TextStyle(color: Color(0xFF4A2C2A))),
                 value: isTrader,
                 onChanged: isLoading ? null : (value) => setState(() => isTrader = value),
+                activeColor: Color(0xFF4A2C2A),
               ),
-              SizedBox(height: 20),
+              SizedBox(height: 15),
               if (!isTrader)
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Full Name',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  validator: (val) => val!.isEmpty ? 'Enter your name' : null,
-                ),
-              if (isTrader)
-                Column(
-                  children: [
-                    TextFormField(
-                      controller: _businessNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Business Name',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.store),
-                      ),
-                      validator: (val) => val!.isEmpty ? 'Enter business name' : null,
-                    ),
-                    SizedBox(height: 15),
-                    TextFormField(
-                      controller: _addressController,
-                      decoration: InputDecoration(
-                        labelText: 'Business Address',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.location_on),
-                      ),
-                      validator: (val) => val!.isEmpty ? 'Enter business address' : null,
-                    ),
-                    SizedBox(height: 15),
-                    TextFormField(
-                      controller: _businessTypeController,
-                      decoration: InputDecoration(
-                        labelText: 'Business Type',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.category),
-                      ),
-                      validator: (val) => val!.isEmpty ? 'Enter business type' : null,
-                    ),
-                  ],
-                ),
+                _buildInputField(_nameController, 'Full Name', Icons.person),
+              if (isTrader) ...[
+                _buildInputField(_businessNameController, 'Business Name', Icons.store),
+                SizedBox(height: 15),
+                _buildInputField(_addressController, 'Business Address', Icons.location_on),
+                SizedBox(height: 15),
+                _buildInputField(_businessTypeController, 'Business Type', Icons.category),
+              ],
               SizedBox(height: 15),
-              TextFormField(
-                controller: _phoneController,
-                decoration: InputDecoration(
-                  labelText: 'Phone Number',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone),
-                ),
-                keyboardType: TextInputType.phone,
-                validator: (val) => val!.isEmpty ? 'Enter your phone number' : null,
-              ),
+              _buildInputField(_phoneController, 'Phone Number', Icons.phone, keyboard: TextInputType.phone),
               SizedBox(height: 15),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
-                validator: (val) => val!.isEmpty ? 'Enter your email' : null,
-              ),
+              _buildInputField(_emailController, 'Email', Icons.email, keyboard: TextInputType.emailAddress),
               SizedBox(height: 15),
-              // Password Field
-              TextFormField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
-                ),
-                validator: (val) => val!.isEmpty ? 'Enter a password' : null,
-              ),
+              _buildPasswordField(_passwordController, 'Password', _obscurePassword, () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              }),
               SizedBox(height: 15),
-              // Confirm Password Field
-              TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: _obscureConfirmPassword,
-                decoration: InputDecoration(
-                  labelText: 'Confirm Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscureConfirmPassword = !_obscureConfirmPassword;
-                      });
-                    },
-                  ),
-                ),
-                validator: (val) => val!.isEmpty ? 'Confirm your password' : null,
-              ),
+              _buildPasswordField(_confirmPasswordController, 'Confirm Password', _obscureConfirmPassword, () {
+                setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+              }),
               SizedBox(height: 15),
               if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Colors.red, fontSize: 14),
+                  textAlign: TextAlign.center,
                 ),
+              SizedBox(height: 10),
               ElevatedButton(
                 onPressed: isLoading ? null : _handleRegistration,
-                child: isLoading 
+                style: ElevatedButton.styleFrom(
+                  minimumSize: Size(double.infinity, 50),
+                  backgroundColor: Color(0xFF4A2C2A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: isLoading
                     ? CircularProgressIndicator(color: Colors.white)
                     : Text('REGISTER'),
               ),
@@ -267,6 +187,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInputField(TextEditingController controller, String label, IconData icon,
+      {TextInputType keyboard = TextInputType.text}) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Color(0xFF4A2C2A)),
+        prefixIcon: Icon(icon, color: Color(0xFF4A2C2A)),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFF4A2C2A)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      keyboardType: keyboard,
+      validator: (val) => val!.isEmpty ? 'Please enter $label' : null,
+    );
+  }
+
+  Widget _buildPasswordField(TextEditingController controller, String label, bool obscure, VoidCallback toggle) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Color(0xFF4A2C2A)),
+        prefixIcon: Icon(Icons.lock, color: Color(0xFF4A2C2A)),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Color(0xFF4A2C2A)),
+          onPressed: toggle,
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFF4A2C2A)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      validator: (val) => val!.isEmpty ? 'Enter $label' : null,
     );
   }
 }

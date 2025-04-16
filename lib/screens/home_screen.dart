@@ -5,10 +5,7 @@ import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'restaurant_detail_screen.dart';
 import 'cart_screen.dart';
-import 'order_confirmation_screen.dart';
 import 'category_restaurants_screen.dart';
-
-
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -45,33 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: _currentIndex == 0 
-            ? Text('Khauu App')
-            : Text('Search Restaurants'),
-        actions: [
-          if (_currentIndex == 0)
-            IconButton(
-              icon: Icon(Icons.shopping_cart),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => CartScreen()),
-              ),
-            ),
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: _signOut,
-          ),
-        ],
-      ),
-      body: _getBody(_currentIndex),
-      bottomNavigationBar: _buildBottomNavBar(),
-    );
-  }
-
   Future<void> _signOut() async {
     try {
       await _auth.signOut();
@@ -86,35 +56,86 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  BottomNavigationBar _buildBottomNavBar() {
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: (index) => setState(() => _currentIndex = index),
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: Colors.orange,
-      unselectedItemColor: Colors.grey,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: 'Home',
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Color(0xFFFFF2E6),
+      appBar: AppBar(
+        backgroundColor: Color(0xFFFFF2E6),
+        elevation: 0,
+        toolbarHeight: 70,
+        title: Row(
+          children: [
+            Image.asset('assets/images/khauu_logo.png', height: 40),
+            SizedBox(width: 10),
+            Text(
+              'Khauu',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4A2C2A),
+              ),
+            ),
+            Spacer(),
+            FutureBuilder<DocumentSnapshot>(
+              future: _firestore.collection('users').doc(_firebaseAuth.currentUser?.uid).get(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return SizedBox();
+                final userData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                final name = userData['name'] ?? '';
+                return Text(
+                  'Hi, $name',
+                  style: TextStyle(color: Color(0xFF4A2C2A), fontSize: 16),
+                );
+              },
+            ),
+          ],
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.search_outlined),
-          activeIcon: Icon(Icons.search),
-          label: 'Search',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.favorite_outline),
-          activeIcon: Icon(Icons.favorite),
-          label: 'Favorites',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
+        actions: [
+          if (_currentIndex == 0)
+            IconButton(
+              icon: Icon(Icons.shopping_cart, color: Color(0xFF4A2C2A)),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CartScreen()),
+              ),
+            ),
+          IconButton(
+            icon: Icon(Icons.logout, color: Color(0xFF4A2C2A)),
+            onPressed: _signOut,
+          ),
+        ],
+      ),
+      body: _getBody(_currentIndex),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Color(0xFF4A2C2A),
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search_outlined),
+            activeIcon: Icon(Icons.search),
+            label: 'Search',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite_outline),
+            activeIcon: Icon(Icons.favorite),
+            label: 'Favorites',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
     );
   }
 
@@ -128,66 +149,45 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildHomeTab() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search for restaurants or dishes...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              onChanged: (value) => setState(() => _searchQuery = value),
-            ),
-          ),
+ Widget _buildHomeTab() {
+  return SingleChildScrollView(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSearchBar(),
 
-          _buildSectionHeader('All Restaurants'),
-          _buildRestaurantList(
-           query: _firestore.collection('restaurants').limit(20),
-          ),
+        _buildRestaurantList(
+          title: 'All Restaurants',
+          query: _firestore.collection('restaurants').limit(20),
+        ),
 
-          
-          _buildSectionHeader('Categories'),
-          _buildCategoryGrid(),
+        _buildSectionHeader('Categories'),
+        _buildCategoryGrid(),
 
-          _buildSectionHeader('Near You'),
-          _buildRestaurantList(
-            query: _firestore.collection('restaurants')
-              .orderBy('distance', descending: false)
-              .limit(10)
-          ),
-        ],
-      ),
-    );
-  }
+        _buildRestaurantList(
+          title: 'Near You',
+          query: _firestore
+              .collection('restaurants')
+              .orderBy('distance')
+              .limit(10),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildSearchTab() {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Search restaurants, dishes...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) => setState(() => _searchQuery = value),
-          ),
-        ),
+        _buildSearchBar(),
         Expanded(
           child: _buildRestaurantList(
+            title: 'Search Results',
             query: _searchQuery.isNotEmpty
               ? _firestore.collection('restaurants')
                   .where('name', isGreaterThanOrEqualTo: _searchQuery)
                   .where('name', isLessThan: _searchQuery + 'z')
-              : _firestore.collection('restaurants').limit(10)
+              : _firestore.collection('restaurants').limit(10),
           ),
         ),
       ],
@@ -197,39 +197,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFavoritesTab() {
     final userId = _firebaseAuth.currentUser?.uid;
     if (userId == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.favorite_border, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Please sign in to view favorites'),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => LoginScreen()),
-                );
-              },
-              child: Text('Sign In'),
-            ),
-          ],
-        ),
-      );
+      return _buildAuthPrompt('Please sign in to view favorites');
     }
 
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('users').doc(userId).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+        if (!snapshot.hasData || !snapshot.data!.exists) return Center(child: CircularProgressIndicator());
 
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return Center(child: CircularProgressIndicator());
-        }
-        
         final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
         final favorites = List<String>.from(data['favorites'] ?? []);
 
@@ -249,10 +225,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         }
-
         return _buildRestaurantList(
+          title: 'Your Favorites',
           query: _firestore.collection('restaurants')
-            .where(FieldPath.documentId, whereIn: favorites)
+              .where(FieldPath.documentId, whereIn: favorites),
         );
       },
     );
@@ -260,78 +236,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProfileTab() {
     final userId = _firebaseAuth.currentUser?.uid;
-    if (userId == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.person_outline, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Guest User'),
-            SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => LoginScreen()),
-                );
-              },
-              child: Text('Sign In'),
-            ),
-          ],
-        ),
-      );
-    }
+    if (userId == null) return _buildAuthPrompt('Guest User');
 
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('users').doc(userId).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error loading profile'));
-        }
-
-        if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator());
-        }
+        if (snapshot.hasError) return Center(child: Text('Error loading profile'));
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
         final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-        
+
         return SingleChildScrollView(
           padding: EdgeInsets.all(16),
           child: Column(
             children: [
               CircleAvatar(
                 radius: 50,
-                backgroundImage: data['photoUrl'] != null 
-                    ? NetworkImage(data['photoUrl'])
-                    : null,
-                child: data['photoUrl'] == null 
-                    ? Icon(Icons.person, size: 50)
-                    : null,
+                backgroundImage: data['photoUrl'] != null ? NetworkImage(data['photoUrl']) : null,
+                child: data['photoUrl'] == null ? Icon(Icons.person, size: 50) : null,
               ),
               SizedBox(height: 16),
-              Text(
-                data['name'] ?? 'No Name',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
+              Text(data['name'] ?? 'No Name',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               SizedBox(height: 8),
               Text(data['email'] ?? ''),
               SizedBox(height: 24),
-              ListTile(
-                leading: Icon(Icons.history),
-                title: Text('Order History'),
-                onTap: () {},
-              ),
+              ListTile(leading: Icon(Icons.history), title: Text('Order History')),
               ListTile(
                 leading: Icon(Icons.favorite),
                 title: Text('Favorites'),
                 onTap: () => setState(() => _currentIndex = 2),
               ),
-              ListTile(
-                leading: Icon(Icons.settings),
-                title: Text('Settings'),
-                onTap: () {},
-              ),
+              ListTile(leading: Icon(Icons.settings), title: Text('Settings')),
               SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _signOut,
@@ -344,12 +280,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Text(
-        title,
-        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      padding: const EdgeInsets.all(16.0),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'Search for restaurants or dishes...',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        onChanged: (value) => setState(() => _searchQuery = value),
       ),
     );
   }
@@ -369,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GridView.builder(
       shrinkWrap: true,
       physics: NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.all(8),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
         childAspectRatio: 0.8,
@@ -376,14 +319,14 @@ class _HomeScreenState extends State<HomeScreen> {
       itemCount: categories.length,
       itemBuilder: (context, index) {
         return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: InkWell(
             onTap: () {
-              String categoryName = categories[index]['name'];
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => CategoryRestaurantsScreen(
-                    category: categoryName,
+                  builder: (_) => CategoryRestaurantsScreen(
+                    category: categories[index]['name'],
                   ),
                 ),
               );
@@ -391,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(categories[index]['icon'], size: 30),
+                Icon(categories[index]['icon'], size: 30, color: Color(0xFF4A2C2A)),
                 SizedBox(height: 8),
                 Text(categories[index]['name']),
               ],
@@ -402,73 +345,146 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRestaurantList({required Query query}) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: query.snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error loading restaurants'));
-        }
+ Widget _buildRestaurantList({
+  required String title,
+  required Query query,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSectionHeader(title),
+      SizedBox(
+        height: 250,
+        child: StreamBuilder<QuerySnapshot>(
+          stream: query.snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) return Center(child: Text('Error loading $title'));
+            if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+            if (snapshot.data!.docs.isEmpty) return Center(child: Text('No restaurants'));
 
-        if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator());
-        }
-        
-        if (snapshot.data!.docs.isEmpty) {
-          return Center(child: Text('No restaurants found'));
-        }
+            return ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: snapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                var doc = snapshot.data!.docs[index];
+                final data = doc.data() as Map<String, dynamic>? ?? {};
 
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            var restaurant = snapshot.data!.docs[index];
-            final data = restaurant.data() as Map<String, dynamic>? ?? {};
-            
-            return Card(
-              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: data['imageUrl'] != null
-                      ? NetworkImage(data['imageUrl'])
-                      : null,
-                  child: data['imageUrl'] == null
-                      ? Icon(Icons.restaurant)
-                      : null,
-                ),
-                title: Text(data['name'] ?? 'Unknown'),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(data['address'] ?? ''),
-                    Row(
-                      children: [
-                        Icon(Icons.star, size: 16, color: Colors.orange),
-                        Text(' ${data['rating']?.toStringAsFixed(1) ?? '0.0'}'),
-                        Text(' • ${data['deliveryTime'] ?? '20-30'} min'),
-                      ],
-                    ),
-                  ],
-                ),
-                trailing: Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => RestaurantDetailScreen(
-                        restaurantId: restaurant.id,
-                        restaurantName: data['name'] ?? 'Unknown',
-                        restaurantImage: data['imageUrl'],
+                return Container(
+                  width: 170,
+                  margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RestaurantDetailScreen(
+                            restaurantId: doc.id,
+                            restaurantName: data['name'] ?? '',
+                            restaurantImage: data['imageUrl'],
+                          ),
+                        ),
+                      );
+                    },
+                    child: Card(
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      elevation: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                            child: data['imageUrl'] != null
+                                ? Image.network(
+                                    data['imageUrl'],
+                                    height: 100,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    height: 100,
+                                    color: Colors.grey[300],
+                                    child: Icon(Icons.restaurant, size: 40),
+                                  ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  data['name'] ?? 'Unknown',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(Icons.star, size: 14, color: Colors.orange),
+                                    SizedBox(width: 4),
+                                    Text(data['rating']?.toStringAsFixed(1) ?? '0.0'),
+                                  ],
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  data['deliveryTime'] != null
+                                      ? '${data['deliveryTime']} min'
+                                      : '20-30 min',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             );
           },
-        );
-      },
+        ),
+      ),
+    ],
+  );
+}
+
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF4A2C2A)),
+      ),
+    );
+  }
+
+  Widget _buildAuthPrompt(String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.person_outline, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(message),
+          SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => LoginScreen()),
+            ),
+            child: Text('Sign In'),
+          ),
+        ],
+      ),
     );
   }
 }
