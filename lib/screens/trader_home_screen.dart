@@ -803,7 +803,7 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
               DropdownButtonFormField<String>(
                 value: _category,
                 hint: Text('Select Category*'),
-                items: ['Appetizer', 'Main Course', 'Dessert', 'Drink','Sushi','Pizza','Burger']
+                items: ['Appetizer', 'Main Course', 'Dessert', 'Drink','Sushi','Pizza','Burger','Momo']
                     .map((category) => DropdownMenuItem(
                           value: category,
                           child: Text(category),

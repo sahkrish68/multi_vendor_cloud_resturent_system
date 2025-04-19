@@ -305,6 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
       {'name': 'Sushi', 'icon': Icons.set_meal},
       {'name': 'Pizza', 'icon': Icons.local_pizza},
       {'name': 'Burger', 'icon': Icons.fastfood},
+      {'name': 'Momo', 'icon': Icons.ramen_dining},
       {'name': 'View All', 'icon': Icons.more_horiz},
     ];
 

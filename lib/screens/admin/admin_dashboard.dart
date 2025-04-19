@@ -1,5 +1,3 @@
-// admin_dashboard.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,15 +17,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final AuthService _auth = AuthService();
   int _currentIndex = 0;
 
-  final TextEditingController _searchController = TextEditingController();
-
   List<DocumentSnapshot> _restaurants = [];
   List<DocumentSnapshot> _pendingApprovals = [];
-  List<DocumentSnapshot> _restaurantMenu = [];
+  Map<String, List<DocumentSnapshot>> _restaurantMenus = {};
   List<DocumentSnapshot> _recentActivities = [];
 
   bool _isLoading = true;
-  String? _selectedRestaurantId;
 
   @override
   void initState() {
@@ -51,14 +46,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> _loadRestaurants() async {
     try {
-      final snapshot = await _firestore
-          .collection('restaurants')
-          .where('approved', isEqualTo: true)
-          .orderBy('approvedAt', descending: true)
-          .get();
+      final snapshot = await _firestore.collection('restaurants').orderBy('name').get();
       _restaurants = snapshot.docs;
+
+      for (var doc in _restaurants) {
+        await _loadRestaurantMenu(doc.id);
+      }
     } catch (e) {
       print("LoadRestaurants Error: $e");
+    }
+  }
+
+  Future<void> _loadRestaurantMenu(String restaurantId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('restaurants')
+          .doc(restaurantId)
+          .collection('menu')
+          .orderBy('createdAt', descending: true)
+          .get();
+      _restaurantMenus[restaurantId] = snapshot.docs;
+    } catch (e) {
+      print("LoadRestaurantMenu Error: $e");
     }
   }
 
@@ -74,63 +83,54 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  Future<void> _loadRestaurantMenu(String restaurantId) async {
+  Future<void> _loadRecentActivities() async {
     try {
-      final snapshot = await _firestore
-          .collection('restaurants')
-          .doc(restaurantId)
-          .collection('menu')
+      final snapshot = await _firestore.collection('restaurants').orderBy('name').get();
+      final orders = await _firestore
+          .collection('orders')
           .orderBy('createdAt', descending: true)
+          .limit(3)
           .get();
-      setState(() => _restaurantMenu = snapshot.docs);
+
+      final all = [...snapshot.docs, ...orders.docs];
+
+      all.sort((a, b) {
+        final Timestamp aTime = (a.data() as Map<String, dynamic>?)?['approvedAt'] ??
+            (a.data() as Map<String, dynamic>?)?['createdAt'] ??
+            Timestamp(0, 0);
+        final Timestamp bTime = (b.data() as Map<String, dynamic>?)?['approvedAt'] ??
+            (b.data() as Map<String, dynamic>?)?['createdAt'] ??
+            Timestamp(0, 0);
+        return bTime.compareTo(aTime);
+      });
+
+      setState(() => _recentActivities = all.cast<DocumentSnapshot>());
     } catch (e) {
-      print("LoadRestaurantMenu Error: $e");
+      print("LoadRecentActivities Error: $e");
     }
   }
-
-  Future<void> _loadRecentActivities() async {
-  try {
-    final approvals = await _firestore
-        .collection('restaurants')
-        .where('approved', isEqualTo: true)
-        .orderBy('approvedAt', descending: true)
-        .limit(3)
-        .get();
-
-    final orders = await _firestore
-        .collection('orders')
-        .orderBy('createdAt', descending: true)
-        .limit(3)
-        .get();
-
-    final all = [...approvals.docs, ...orders.docs];
-
-    all.sort((a, b) {
-      final Timestamp aTime =
-          (a.data() as Map<String, dynamic>?)?['approvedAt'] ??
-          (a.data() as Map<String, dynamic>?)?['createdAt'] ??
-          Timestamp(0, 0);
-      final Timestamp bTime =
-          (b.data() as Map<String, dynamic>?)?['approvedAt'] ??
-          (b.data() as Map<String, dynamic>?)?['createdAt'] ??
-          Timestamp(0, 0);
-      return bTime.compareTo(aTime);
-    });
-
-    setState(() => _recentActivities = all);
-  } catch (e) {
-    print("LoadRecentActivities Error: $e");
-  }
-}
-
 
   Future<void> _approveTrader(String id) async {
     try {
       await _firestore.collection('traders').doc(id).update({
         'isApproved': true,
       });
+
+      final restaurantSnap = await _firestore
+          .collection('restaurants')
+          .where('ownerId', isEqualTo: id)
+          .get();
+
+      for (var doc in restaurantSnap.docs) {
+        await doc.reference.update({
+          'approved': true,
+          'approvedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       await _loadPendingApprovals();
-      setState(() {});
+      await _loadRestaurants();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Trader approved successfully')),
       );
@@ -138,6 +138,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
       print("ApproveTrader Error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error approving trader')),
+      );
+    }
+  }
+
+  Future<void> _declineTrader(String id) async {
+    try {
+      await _firestore.collection('traders').doc(id).delete();
+      await _loadPendingApprovals();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Trader declined and removed')),
+      );
+    } catch (e) {
+      print("DeclineTrader Error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error declining trader')),
       );
     }
   }
@@ -165,7 +180,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   int _calculateTotalMenuItems() {
-    return _restaurantMenu.length;
+    return _restaurantMenus.values.fold(0, (sum, items) => sum + items.length);
   }
 
   Future<void> _showDeleteMenuItemDialog(String restaurantId, String itemId) async {
@@ -200,17 +215,155 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _getBody(int index) {
-    switch (index) {
-      case 0:
-        return _buildDashboardTab();
-      case 1:
-        return _buildRestaurantsTab();
-      case 2:
-        return _buildApprovalsTab();
-      default:
-        return _buildDashboardTab();
-    }
+  Widget _buildRestaurantsTab() {
+    return ListView.builder(
+      itemCount: _restaurants.length,
+      itemBuilder: (context, index) {
+        final doc = _restaurants[index];
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final restaurantId = doc.id;
+        final menuItems = _restaurantMenus[restaurantId] ?? [];
+
+        return ExpansionTile(
+          title: Row(
+            children: [
+              if (data['imageUrl'] != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    data['imageUrl'],
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(data['name'] ?? 'Unnamed',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    Text(data['address'] ?? '', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          children: menuItems.map((item) {
+            final itemData = item.data() as Map<String, dynamic>? ?? {};
+            final category = itemData['category'] ?? 'Uncategorized';
+            return ListTile(
+              title: Text(itemData['name'] ?? ''),
+              subtitle: Text("Category: $category"),
+              trailing: IconButton(
+                icon: Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _showDeleteMenuItemDialog(restaurantId, item.id),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildDashboardTab() {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Overview", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          SizedBox(height: 16),
+          GridView.count(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 1.3,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            children: [
+              _buildStatCard("Total Restaurants", _restaurants.length.toString(), Icons.restaurant, Colors.blue),
+              _buildStatCard("Pending Traders", _pendingApprovals.length.toString(), Icons.pending, Colors.orange),
+              _buildStatCard("Total Menu Items", _calculateTotalMenuItems().toString(), Icons.menu_book, Colors.purple),
+              _buildStatCard("Active Traders", _restaurants.length.toString(), Icons.people, Colors.green),
+            ],
+          ),
+          SizedBox(height: 24),
+          Text("Recent Activities", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          SizedBox(height: 12),
+          _recentActivities.isEmpty
+              ? Text("No recent activity found.")
+              : Column(
+                  children: _recentActivities.map((doc) {
+                    final data = (doc.data() as Map<String, dynamic>?) ?? {};
+                    final isOrder = data.containsKey('items');
+                    final timestamp = data['createdAt'] ?? data['approvedAt'];
+
+                    return ListTile(
+                      leading: Icon(
+                        isOrder ? Icons.shopping_bag : Icons.restaurant,
+                        color: isOrder ? Colors.green : Colors.blue,
+                      ),
+                      title: Text(
+                        isOrder
+                            ? "Order #${doc.id.substring(0, 6)}"
+                            : "Approved: ${data['name'] ?? 'Unnamed Restaurant'}",
+                      ),
+                      subtitle: Text(_formatTimestamp(timestamp)),
+                    );
+                  }).toList(),
+                )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApprovalsTab() {
+    return ListView.builder(
+      itemCount: _pendingApprovals.length,
+      itemBuilder: (context, index) {
+        final doc = _pendingApprovals[index];
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        return Card(
+          margin: EdgeInsets.all(10),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data['businessName'] ?? 'Unnamed Business',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                SizedBox(height: 6),
+                Text("Address: ${data['address'] ?? 'N/A'}"),
+                Text("Phone: ${data['phone'] ?? 'N/A'}"),
+                Text("Email: ${data['email'] ?? 'N/A'}"),
+                Text("User Type: ${data['userType'] ?? 'N/A'}"),
+                SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.close),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      label: Text("Decline"),
+                      onPressed: () => _declineTrader(doc.id),
+                    ),
+                    SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.check),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                      label: Text("Approve"),
+                      onPressed: () => _approveTrader(doc.id),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -250,127 +403,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildDashboardTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Overview", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            childAspectRatio: 1.3,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: [
-              _buildStatCard("Total Restaurants", _restaurants.length.toString(), Icons.restaurant, Colors.blue),
-              _buildStatCard("Pending Traders", _pendingApprovals.length.toString(), Icons.pending, Colors.orange),
-              _buildStatCard("Total Menu Items", _calculateTotalMenuItems().toString(), Icons.menu_book, Colors.purple),
-              _buildStatCard("Active Traders", _restaurants.length.toString(), Icons.people, Colors.green),
-            ],
-          ),
-         SizedBox(height: 24),
-Text("Recent Activities", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-SizedBox(height: 12),
-_recentActivities.isEmpty
-    ? Text("No recent activity found.")
-    : Column(
-        children: _recentActivities.map((doc) {
-          final data = (doc.data() as Map<String, dynamic>?) ?? {};
-          final isOrder = data.containsKey('items');
-          final timestamp = data['createdAt'] ?? data['approvedAt'];
-
-          return ListTile(
-            leading: Icon(
-              isOrder ? Icons.shopping_bag : Icons.restaurant,
-              color: isOrder ? Colors.green : Colors.blue,
-            ),
-            title: Text(
-              isOrder
-                  ? "Order #${doc.id.substring(0, 6)}"
-                  : "Approved: ${data['name'] ?? 'Unnamed Restaurant'}",
-            ),
-            subtitle: Text(_formatTimestamp(timestamp)),
-          );
-        }).toList(),
-      )
-
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRestaurantsTab() {
-    return ListView.builder(
-      itemCount: _restaurants.length,
-      itemBuilder: (context, index) {
-        final doc = _restaurants[index];
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        return ExpansionTile(
-          title: Text(data['name'] ?? 'Unnamed'),
-          subtitle: Text(data['address'] ?? ''),
-          onExpansionChanged: (expanded) {
-            if (expanded) {
-              _selectedRestaurantId = doc.id;
-              _loadRestaurantMenu(doc.id);
-            }
-          },
-          children: _restaurantMenu.map((item) {
-            final itemData = (item.data() as Map<String, dynamic>?) ?? {};
-            return ListTile(
-              title: Text(itemData['name'] ?? ''),
-              subtitle: Text("\$${itemData['price']}"),
-              trailing: IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () => _showDeleteMenuItemDialog(doc.id, item.id),
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildApprovalsTab() {
-    return ListView.builder(
-      itemCount: _pendingApprovals.length,
-      itemBuilder: (context, index) {
-        final doc = _pendingApprovals[index];
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        return Card(
-          margin: EdgeInsets.all(10),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data['businessName'] ?? 'Unnamed Business',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 6),
-                Text("Address: ${data['address'] ?? 'N/A'}"),
-                Text("Phone: ${data['phone'] ?? 'N/A'}"),
-                Text("Email: ${data['email'] ?? 'N/A'}"),
-                Text("User Type: ${data['userType'] ?? 'N/A'}"),
-                SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ElevatedButton.icon(
-                      icon: Icon(Icons.check),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                      label: Text("Approve"),
-                      onPressed: () => _approveTrader(doc.id),
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  Widget _getBody(int index) {
+    switch (index) {
+      case 0:
+        return _buildDashboardTab();
+      case 1:
+        return _buildRestaurantsTab();
+      case 2:
+        return _buildApprovalsTab();
+      default:
+        return _buildDashboardTab();
+    }
   }
 }
