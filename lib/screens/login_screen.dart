@@ -6,6 +6,8 @@ import 'home_screen.dart';
 import 'trader_home_screen.dart';
 import 'admin/admin_dashboard.dart';
 import 'register_screen.dart';
+import 'forget_password_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -111,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFFFF2E6), // Light background to match splash
+      backgroundColor: Color(0xFFFFF2E6),
       body: Center(
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -164,7 +166,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: _obscurePassword,
                   validator: (val) => val!.length < 6 ? 'Minimum 6 characters' : null,
                 ),
-                SizedBox(height: 20),
+                SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: isLoading
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => ForgetPasswordScreen()),
+                            );
+                          },
+                    child: Text(
+                      'Forgot Password?',
+                      style: TextStyle(color: Color(0xFF4A2C2A), fontSize: 14),
+                    ),
+                  ),
+                ),
                 if (_errorMessage != null)
                   Text(
                     _errorMessage!,
