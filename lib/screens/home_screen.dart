@@ -3,9 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
 import 'restaurant_detail_screen.dart';
 import 'cart_screen.dart';
 import 'category_restaurants_screen.dart';
+import 'order_history_screen.dart'; // Import the missing screen
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -235,50 +237,117 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildProfileTab() {
-    final userId = _firebaseAuth.currentUser?.uid;
-    if (userId == null) return _buildAuthPrompt('Guest User');
+  final userId = _firebaseAuth.currentUser?.uid;
+  if (userId == null) return _buildAuthPrompt('Guest User');
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('users').doc(userId).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Error loading profile'));
-        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+  return StreamBuilder<DocumentSnapshot>(
+    stream: _firestore.collection('users').doc(userId).snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) return Center(child: Text('Error loading profile'));
+      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
-        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+      final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundImage: data['photoUrl'] != null ? NetworkImage(data['photoUrl']) : null,
-                child: data['photoUrl'] == null ? Icon(Icons.person, size: 50) : null,
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 50,
+              backgroundImage: data['photoUrl'] != null ? NetworkImage(data['photoUrl']) : null,
+              child: data['photoUrl'] == null ? Icon(Icons.person, size: 50) : null,
+            ),
+            SizedBox(height: 16),
+            Text(
+              data['name'] ?? 'No Name',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(data['email'] ?? ''),
+            SizedBox(height: 24),
+
+            // ✅ Order History Section
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Order History',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              SizedBox(height: 16),
-              Text(data['name'] ?? 'No Name',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
-              Text(data['email'] ?? ''),
-              SizedBox(height: 24),
-              ListTile(leading: Icon(Icons.history), title: Text('Order History')),
-              ListTile(
-                leading: Icon(Icons.favorite),
-                title: Text('Favorites'),
-                onTap: () => setState(() => _currentIndex = 2),
-              ),
-              ListTile(leading: Icon(Icons.settings), title: Text('Settings')),
-              SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _signOut,
-                child: Text('Sign Out'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+            ),
+            SizedBox(height: 8),
+            StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('users')
+                  .doc(userId)
+                  .collection('orders')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Text('Error loading orders');
+                if (!snapshot.hasData) return CircularProgressIndicator();
+
+                final orders = snapshot.data!.docs;
+
+                if (orders.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text('No orders yet.'),
+                  );
+                }
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: orders.length,
+                  itemBuilder: (context, index) {
+                    final order = orders[index].data() as Map<String, dynamic>;
+                    final createdAt = (order['createdAt'] as Timestamp?)?.toDate();
+                    final status = order['status'] ?? 'unknown';
+                    final total = order['total'] ?? 0.0;
+                    final restaurant = order['restaurantName'] ?? 'Restaurant';
+
+                    return Card(
+                      margin: EdgeInsets.symmetric(vertical: 8),
+                      child: ListTile(
+                        leading: Icon(Icons.receipt_long),
+                        title: Text('$restaurant • ₹$total'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Status: ${status.toUpperCase()}'),
+                            if (createdAt != null)
+                              Text('Ordered: ${DateFormat.yMd().add_jm().format(createdAt)}'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+
+            SizedBox(height: 24),
+            ListTile(
+              leading: Icon(Icons.favorite),
+              title: Text('Favorites'),
+              onTap: () => setState(() => _currentIndex = 2),
+            ),
+            ListTile(
+              leading: Icon(Icons.settings),
+              title: Text('Settings'),
+              onTap: () {}, // Add settings navigation if needed
+            ),
+            SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _signOut,
+              child: Text('Sign Out'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildSearchBar() {
     return Padding(
@@ -456,6 +525,47 @@ class _HomeScreenState extends State<HomeScreen> {
     ],
   );
 }
+Widget _buildOrderHistory() {
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId == null) return Center(child: Text('Please log in'));
+
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('orders')
+        .orderBy('createdAt', descending: true)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+
+      final orders = snapshot.data!.docs;
+
+      if (orders.isEmpty) return Center(child: Text('No orders yet'));
+
+      return ListView.builder(
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index].data() as Map<String, dynamic>;
+          final createdAt = (order['createdAt'] as Timestamp?)?.toDate();
+          final status = order['status'] ?? 'unknown';
+          final total = order['total'] ?? 0.0;
+          final restaurant = order['restaurantName'] ?? 'Restaurant';
+
+          return ListTile(
+            leading: Icon(Icons.receipt_long),
+            title: Text('$restaurant • ₹$total'),
+            subtitle: Text(
+              'Status: $status\n${createdAt != null ? DateFormat.yMd().add_jm().format(createdAt) : 'Unknown date'}',
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 
 
   Widget _buildSectionHeader(String title) {

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:multi_vendor_cloud_resturent_system/screens/checkout_screen.dart';
+import 'package:intl/intl.dart';
+import 'checkout_screen.dart';
+import '../screens/order_confirmation_screen.dart';
+
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 
@@ -210,15 +213,12 @@ class _CartScreenState extends State<CartScreen> {
         ),
         Spacer(),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
-            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          ),
           onPressed: () {
-            // Add navigation to CheckoutScreen here
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => CheckoutScreen()),
+              MaterialPageRoute(
+               builder: (context) => CheckoutScreen(),
+              ),
             );
           },
           child: Text('Checkout'),

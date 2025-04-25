@@ -64,6 +64,8 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      print("👤 Logged-in Trader UID: ${user.uid}");
+
       QuerySnapshot orderSnapshot = await _firestore
           .collection('orders')
           .where('restaurantId', isEqualTo: user.uid)
@@ -424,136 +426,131 @@ class _TraderHomeScreenState extends State<TraderHomeScreen> {
     );
   }
 
-  Widget _buildOrdersTab() {
-    return DefaultTabController(
-      length: 4,
-      child: Column(
-        children: [
-          Material(
-            child: TabBar(
-              isScrollable: true,
-              labelColor: Colors.blue,
-              unselectedLabelColor: Colors.grey,
-              tabs: const [
-                Tab(text: 'Pending'),
-                Tab(text: 'Preparing'),
-                Tab(text: 'Ready'),
-                Tab(text: 'Completed'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _buildOrderList('pending'),
-                _buildOrderList('preparing'),
-                _buildOrderList('ready'),
-                _buildOrderList('completed'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderList(String status) {
-    final filteredOrders = _orders.where((order) => order['status'] == status).toList();
-    
-    if (filteredOrders.isEmpty) {
-      return Center(child: Text('No $status orders'));
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: filteredOrders.length,
-      itemBuilder: (context, index) {
-        final order = filteredOrders[index];
-        final orderData = order.data() as Map<String, dynamic>;
-        final items = orderData['items'] as List<dynamic>? ?? [];
-        final customer = orderData['customer'] as Map<String, dynamic>? ?? {};
-        final createdAt = orderData['createdAt']?.toDate() ?? DateTime.now();
-
-        return Card(
-          margin: EdgeInsets.only(bottom: 16),
-          child: ExpansionTile(
-            title: Text('Order #${order.id.substring(0, 8)}'),
-            subtitle: Text(
-              '\$${orderData['total']?.toStringAsFixed(2) ?? '0.00'} • '
-              '${DateFormat('MMM d, h:mm a').format(createdAt)}'
-            ),
-            trailing: Chip(
-              label: Text(status.toUpperCase(), style: TextStyle(color: Colors.white)),
-              backgroundColor: _getStatusColor(status),
-            ),
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  children: [
-                    ...items.map((item) => ListTile(
-                      leading: Icon(Icons.fastfood),
-                      title: Text(item['name'] ?? 'Unknown Item'),
-                      subtitle: Text('\$${item['price']?.toStringAsFixed(2) ?? '0.00'}'),
-                      trailing: Text('x${item['quantity'] ?? '1'}'),
-                    )).toList(),
-                    Divider(),
-                    ListTile(
-                      title: Text('Customer: ${customer['name'] ?? 'Unknown'}'),
-                      subtitle: Text('Phone: ${customer['phone'] ?? 'Not provided'}'),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: _buildOrderActionButtons(status, order.id),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+ Widget _buildOrdersTab() {
+  return DefaultTabController(
+    length: 4,
+    child: Column(
+      children: [
+        Material(
+          child: TabBar(
+            isScrollable: true,
+            labelColor: Colors.blue,
+            unselectedLabelColor: Colors.grey,
+            tabs: const [
+              Tab(text: 'Pending'),
+              Tab(text: 'Preparing'),
+              Tab(text: 'Ready'),
+              Tab(text: 'Completed'),
             ],
           ),
-        );
-      },
-    );
+        ),
+        Expanded(
+          child: TabBarView(
+            children: [
+              _buildOrderList('pending'),
+              _buildOrderList('preparing'),
+              _buildOrderList('ready'),
+              _buildOrderList('completed'),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _buildOrderList(String status) {
+  final filteredOrders = _orders.where((order) => order['status'] == status).toList();
+
+  if (filteredOrders.isEmpty) {
+    return Center(child: Text('No $status orders'));
   }
 
+  return ListView.builder(
+    padding: EdgeInsets.all(16),
+    itemCount: filteredOrders.length,
+    itemBuilder: (context, index) {
+      final order = filteredOrders[index];
+      final orderData = order.data() as Map<String, dynamic>;
+      final items = orderData['items'] as List<dynamic>? ?? [];
+      final createdAt = orderData['createdAt']?.toDate() ?? DateTime.now();
+
+      return Card(
+        margin: EdgeInsets.only(bottom: 16),
+        child: ExpansionTile(
+          title: Text('Order #${order.id.substring(0, 8)}'),
+          subtitle: Text(
+            '\$${orderData['total']?.toStringAsFixed(2) ?? '0.00'} • '
+            '${DateFormat('MMM d, h:mm a').format(createdAt)}'
+          ),
+          trailing: Chip(
+            label: Text(status.toUpperCase(), style: TextStyle(color: Colors.white)),
+            backgroundColor: _getStatusColor(status),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                children: [
+                  ...items.map((item) => ListTile(
+                    leading: Icon(Icons.fastfood),
+                    title: Text(item['name'] ?? 'Unknown Item'),
+                    subtitle: Text('\$${item['price']?.toStringAsFixed(2) ?? '0.00'}'),
+                    trailing: Text('x${item['quantity'] ?? '1'}'),
+                  )),
+                  Divider(),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: _buildOrderActionButtons(status, order.id),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
   List<Widget> _buildOrderActionButtons(String status, String orderId) {
-    switch (status) {
-      case 'pending':
-        return [
-          ElevatedButton(
-            child: Text('Accept Order'),
-            onPressed: () => _updateOrderStatus(orderId, 'preparing'),
-          ),
-          OutlinedButton(
-            child: Text('Reject'),
-            onPressed: () => _updateOrderStatus(orderId, 'rejected'),
-          ),
-        ];
-      case 'preparing':
-        return [
-          ElevatedButton(
-            child: Text('Mark Ready'),
-            onPressed: () => _updateOrderStatus(orderId, 'ready'),
-          ),
-          OutlinedButton(
-            child: Text('Cancel'),
-            onPressed: () => _updateOrderStatus(orderId, 'cancelled'),
-          ),
-        ];
-      case 'ready':
-        return [
-          ElevatedButton(
-            child: Text('Mark Delivered'),
-            onPressed: () => _updateOrderStatus(orderId, 'completed'),
-          ),
-        ];
-      default:
-        return [];
-    }
+  switch (status) {
+    case 'pending':
+      return [
+        ElevatedButton(
+          child: Text('Accept Order'),
+          onPressed: () => _updateOrderStatus(orderId, 'preparing'),
+        ),
+        OutlinedButton(
+          child: Text('Reject'),
+          onPressed: () => _updateOrderStatus(orderId, 'rejected'),
+        ),
+      ];
+    case 'preparing':
+      return [
+        ElevatedButton(
+          child: Text('Mark Ready'),
+          onPressed: () => _updateOrderStatus(orderId, 'ready'),
+        ),
+        OutlinedButton(
+          child: Text('Cancel'),
+          onPressed: () => _updateOrderStatus(orderId, 'cancelled'),
+        ),
+      ];
+    case 'ready':
+      return [
+        ElevatedButton(
+          child: Text('Mark Delivered'),
+          onPressed: () => _updateOrderStatus(orderId, 'completed'),
+        ),
+      ];
+    default:
+      return [];
   }
+}
 
   Widget _buildInventoryTab() {
     return Column(

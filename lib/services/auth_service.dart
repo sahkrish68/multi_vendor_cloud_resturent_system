@@ -4,53 +4,120 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final AuthService _instance = AuthService._internal();
+
+  factory AuthService() {
+    return _instance;
+  }
+
+  AuthService._internal(); // private constructor
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // final TextEditingController _addressController = TextEditingController();
+  bool _isProcessing = false;
+  String? _selectedPaymentMethod;
 
-  /// 🔐 Generate and store OTP, then send it to email
- Future<void> sendOtpToEmail(String email) async {
-  try {
-    final otp = (100000 + Random().nextInt(900000)).toString();
-    final expiresAt = DateTime.now().add(Duration(minutes: 5)).millisecondsSinceEpoch;
+  /// ✅ Create Order Method
+  Future<void> createOrder({
+    required String userId,
+    required String restaurantId,
+    required String restaurantName,
+    required String address,
+    required String paymentMethod,
+    required List<Map<String, dynamic>> items,
+    required double total,
+  }) async {
+    final now = Timestamp.now();
+    final orderId = _firestore.collection('orders').doc().id;
 
-    print("User UID: ${FirebaseAuth.instance.currentUser?.uid}");
+    final orderData = {
+      'orderId': orderId,
+      'userId': userId,
+      'restaurantId': restaurantId,
+      'restaurantName': restaurantName,
+      'shippingAddress': address,
+      'paymentMethod': paymentMethod,
+      'items': items,
+      'total': total,
+      'status': 'pending',
+      'createdAt': now,
+      'updatedAt': now,
+    };
 
-    await _firestore.collection('emailOtps').doc(email).set({
-      'otp': otp,
-      'expiresAt': expiresAt,
-    });
+    final batch = _firestore.batch();
 
-    print("✅ OTP stored in Firestore");
+    // Save to top-level orders
+    batch.set(_firestore.collection('orders').doc(orderId), orderData);
 
-    final response = await http.post(
-      Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-      headers: {
-        'origin': 'http://localhost', // Required by EmailJS
-        'Content-Type': 'application/json',
+    // Save to user's orders
+    batch.set(
+      _firestore.collection('users').doc(userId).collection('orders').doc(orderId),
+      {
+        'orderId': orderId,
+        'restaurantName': restaurantName,
+        'total': total,
+        'status': 'pending',
+        'createdAt': now,
       },
-      body: jsonEncode({
-        "service_id": "service_bkoesqf",
-        "template_id": "template_b1ds35k",
-        "user_id": "FpkIMUsaeaDnbMnOF",
-        "template_params": {
-          "user_email": email,
-          "user_otp": otp,
-        }
-      }),
     );
 
-    if (response.statusCode != 200) {
-      print("❌ EmailJS failed: ${response.body}");
-      throw Exception("Failed to send OTP email");
-    }
+    // Save to restaurant's orders
+    batch.set(
+      _firestore.collection('restaurants').doc(restaurantId).collection('orders').doc(orderId),
+      {
+        'orderId': orderId,
+        'userId': userId,
+        'total': total,
+        'status': 'pending',
+        'createdAt': now,
+      },
+    );
 
-    print("✅ OTP email sent via EmailJS to $email");
-  } catch (e) {
-    print("❌ sendOtpToEmail failed: $e");
-    rethrow;
+    await batch.commit();
+    print("✅ Order created: $orderId");
   }
- }
+
+  /// ✅ Send OTP to Email
+  Future<void> sendOtpToEmail(String email) async {
+    try {
+      final otp = (100000 + Random().nextInt(900000)).toString();
+      final expiresAt = DateTime.now().add(Duration(minutes: 5)).millisecondsSinceEpoch;
+
+      await _firestore.collection('emailOtps').doc(email).set({
+        'otp': otp,
+        'expiresAt': expiresAt,
+      });
+
+      final response = await http.post(
+        Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+        headers: {
+          'origin': 'http://localhost',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          "service_id": "service_bkoesqf",
+          "template_id": "template_b1ds35k",
+          "user_id": "FpkIMUsaeaDnbMnOF",
+          "template_params": {
+            "user_email": email,
+            "user_otp": otp,
+          }
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception("Failed to send OTP email");
+      }
+    } catch (e) {
+      print("❌ sendOtpToEmail failed: $e");
+      rethrow;
+    }
+  }
+
+  /// ✅ Register a New Customer
   Future<User?> registerUser({
     required String email,
     required String password,
@@ -58,14 +125,10 @@ class AuthService {
     required String phone,
   }) async {
     try {
-      print("📥 Creating user with email: $email");
-
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
+      final result = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-
-      print("✅ User created: ${result.user?.uid}");
 
       await _firestore.collection('users').doc(result.user?.uid).set({
         'uid': result.user?.uid,
@@ -78,11 +141,10 @@ class AuthService {
       });
 
       await sendOtpToEmail(email);
-
       return result.user;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
-    } catch (e) {
+    } catch (_) {
       throw FirebaseAuthException(
         code: 'registration-failed',
         message: 'Registration failed. Please try again',
@@ -90,6 +152,7 @@ class AuthService {
     }
   }
 
+  /// ✅ Register a Trader
   Future<User?> registerTrader({
     required String email,
     required String password,
@@ -99,7 +162,7 @@ class AuthService {
     required String businessType,
   }) async {
     try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
+      final result = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
@@ -118,11 +181,10 @@ class AuthService {
       });
 
       await sendOtpToEmail(email);
-
       return result.user;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
-    } catch (e) {
+    } catch (_) {
       throw FirebaseAuthException(
         code: 'registration-failed',
         message: 'Trader registration failed. Please try again',
@@ -130,16 +192,15 @@ class AuthService {
     }
   }
 
+  /// ✅ Verify OTP
   Future<bool> verifyOtp(String email, String otp) async {
     final doc = await _firestore.collection('emailOtps').doc(email).get();
     if (!doc.exists) return false;
 
     final data = doc.data()!;
-    final storedOtp = data['otp'];
-    final expiresAt = data['expiresAt'];
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    if (now > expiresAt || storedOtp != otp) return false;
+    if (DateTime.now().millisecondsSinceEpoch > data['expiresAt'] || data['otp'] != otp) {
+      return false;
+    }
 
     final userRecord = await _firestore.collection('users').where('email', isEqualTo: email).get();
     final traderRecord = await _firestore.collection('traders').where('email', isEqualTo: email).get();
@@ -154,9 +215,10 @@ class AuthService {
     return true;
   }
 
+  /// ✅ Login
   Future<User?> login(String email, String password, {bool isTrader = false}) async {
     try {
-      UserCredential result = await _auth.signInWithEmailAndPassword(
+      final result = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
@@ -168,72 +230,58 @@ class AuthService {
 
       if (!userDoc.exists) {
         await _auth.signOut();
-        throw FirebaseAuthException(
-          code: 'user-mismatch',
-          message: 'No ${isTrader ? 'trader' : 'user'} found with these credentials',
-        );
+        throw FirebaseAuthException(code: 'user-mismatch', message: 'No user found');
       }
 
       if (!(userDoc.data()?['otpVerified'] ?? false)) {
         await _auth.signOut();
-        throw FirebaseAuthException(
-          code: 'otp-unverified',
-          message: 'Please verify your email OTP before logging in',
-        );
+        throw FirebaseAuthException(code: 'otp-unverified', message: 'OTP not verified');
       }
 
       return result.user;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
-    } catch (e) {
-      throw FirebaseAuthException(
-        code: 'login-failed',
-        message: 'Login failed. Please try again',
-      );
+    } catch (_) {
+      throw FirebaseAuthException(code: 'login-failed', message: 'Login failed');
     }
   }
 
+  /// ✅ Check Admin
   Future<bool> isAdmin() async {
-    User? user = _auth.currentUser;
+    final user = _auth.currentUser;
     if (user == null) return false;
 
-    DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
+    final userDoc = await _firestore.collection('users').doc(user.uid).get();
     return userDoc.exists && userDoc['userType'] == 'admin';
   }
 
+  /// ✅ Logout
   Future<void> signOut() async {
-    try {
-      await _auth.signOut();
-    } catch (e) {
-      throw FirebaseAuthException(
-        code: 'logout-failed',
-        message: 'Failed to sign out. Please try again',
-      );
-    }
+    await _auth.signOut();
   }
 
+  /// ✅ Centralized Firebase Error Handler
   FirebaseAuthException _handleAuthError(FirebaseAuthException e) {
     switch (e.code) {
       case 'email-already-in-use':
-        return FirebaseAuthException(code: e.code, message: 'This email is already registered');
+        return FirebaseAuthException(code: e.code, message: 'Email already in use');
       case 'invalid-email':
-        return FirebaseAuthException(code: e.code, message: 'Please enter a valid email address');
+        return FirebaseAuthException(code: e.code, message: 'Invalid email');
       case 'weak-password':
-        return FirebaseAuthException(code: e.code, message: 'Password should be at least 6 characters');
+        return FirebaseAuthException(code: e.code, message: 'Weak password');
       case 'user-not-found':
-        return FirebaseAuthException(code: e.code, message: 'No user found with this email');
+        return FirebaseAuthException(code: e.code, message: 'User not found');
       case 'wrong-password':
-        return FirebaseAuthException(code: e.code, message: 'Incorrect password');
+        return FirebaseAuthException(code: e.code, message: 'Wrong password');
       case 'user-disabled':
-        return FirebaseAuthException(code: e.code, message: 'This account has been disabled');
-      case 'user-mismatch':
-        return e;
+        return FirebaseAuthException(code: e.code, message: 'Account disabled');
       default:
-        return FirebaseAuthException(code: e.code, message: 'Authentication error: ${e.message}');
+        return FirebaseAuthException(code: e.code, message: e.message ?? 'Unknown error');
     }
   }
 
+  /// ✅ Get User Data
   Future<DocumentSnapshot> getUserData(String uid, bool isTrader) async {
-    return await _firestore.collection(isTrader ? 'traders' : 'users').doc(uid).get();
+    return _firestore.collection(isTrader ? 'traders' : 'users').doc(uid).get();
   }
 }
