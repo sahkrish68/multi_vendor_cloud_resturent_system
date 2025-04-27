@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';  // ✅ Adjust if path is different
-
+import '../services/auth_service.dart';
+import 'order_confirmation_screen.dart';
+import 'paypal_payment_screen.dart'; // ✅ Make sure to import it
 
 class CheckoutScreen extends StatefulWidget {
   @override
@@ -12,9 +13,8 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _addressController = TextEditingController();
   final AuthService _authService = AuthService();
-   String? _selectedPaymentMethod;
-   String? _paymentMethod;
-   bool _isPlacingOrder = false;
+  String? _paymentMethod;
+  bool _isPlacingOrder = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +22,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (uid == null) return Center(child: Text("Please login."));
 
     return Scaffold(
-      appBar: AppBar(title: Text("Checkout")),
+      appBar: AppBar(
+        title: Text("Checkout"),
+        centerTitle: true,
+      ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(uid).collection('cart').snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('cart')
+            .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
@@ -36,71 +43,138 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
+            child: ListView(
               children: [
+                Text(
+                  "Delivery Address",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                SizedBox(height: 8),
                 TextField(
                   controller: _addressController,
-                  decoration: InputDecoration(labelText: "Delivery Address"),
+                  decoration: InputDecoration(
+                    hintText: "Enter delivery address",
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  maxLines: 2,
                 ),
-                SizedBox(height: 16),
-                Row(
+                SizedBox(height: 24),
+                Text(
+                  "Payment Method",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
                   children: [
                     ChoiceChip(
                       label: Text('Cash on Delivery'),
                       selected: _paymentMethod == 'cod',
+                      selectedColor: Colors.green.shade100,
                       onSelected: (_) => setState(() => _paymentMethod = 'cod'),
                     ),
-                    SizedBox(width: 10),
                     ChoiceChip(
-                      label: Text('Credit Card'),
+                      label: Text('Credit Card (PayPal)'),
                       selected: _paymentMethod == 'credit',
+                      selectedColor: Colors.blue.shade100,
                       onSelected: (_) => setState(() => _paymentMethod = 'credit'),
                     ),
                   ],
                 ),
-                SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _isPlacingOrder
-                      ? null
-                      : () async {
-                          if (_addressController.text.isEmpty || _paymentMethod == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Fill all fields')),
-                            );
-                            return;
-                          }
+                SizedBox(height: 24),
+                Divider(),
+                ListTile(
+                  title: Text(
+                    "Total",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                  ),
+                  trailing: Text(
+                    "\$${total.toStringAsFixed(2)}",
+                    style: TextStyle(fontSize: 20),
+                  ),
+                ),
+                Divider(),
+                SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      textStyle: TextStyle(fontSize: 18),
+                      backgroundColor: Colors.teal,
+                    ),
+                    onPressed: _isPlacingOrder
+                        ? null
+                        : () async {
+                            if (_addressController.text.isEmpty || _paymentMethod == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Please fill all fields')),
+                              );
+                              return;
+                            }
 
-                          setState(() => _isPlacingOrder = true);
+                            setState(() => _isPlacingOrder = true);
 
-                          // ✅ Example restaurant data
-                          final restaurantId = items.first['restaurantId'];
-                          final restaurantName = items.first['restaurantName'];
+                            final restaurantId = items.first['restaurantId'];
+                            final restaurantName = items.first['restaurantName'];
 
-                          try {
-                            await _authService.createOrder(
-                              userId: FirebaseAuth.instance.currentUser!.uid,
+                            try {
+                              // ✅ If PayPal selected, open PayPal screen first
+                              if (_paymentMethod == 'credit') {
+                                bool paymentSuccess = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PayPalPaymentScreen(
+                                      totalAmount: total,
+                                      onFinish: (success) {
+                                        Navigator.pop(context, success);
+                                      },
+                                    ),
+                                  ),
+                                );
 
-                              restaurantId: restaurantId,
-                              restaurantName: restaurantName,
-                              address: _addressController.text,
-                              paymentMethod: _paymentMethod!,
-                              items: cartItems.map((doc) => doc.data() as Map<String, dynamic>).toList(),
-                              total: total,
-                            );
-                            
+                                if (!paymentSuccess) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Payment cancelled or failed')),
+                                  );
+                                  setState(() => _isPlacingOrder = false);
+                                  return;
+                                }
+                              }
 
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Order placed!')),
-                            );
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to place order')),
-                            );
-                          } finally {
-                            setState(() => _isPlacingOrder = false);
-                          }
-                        },
-                  child: Text(_isPlacingOrder ? 'Placing Order...' : 'Place Order'),
+                              // ✅ After PayPal success or if COD selected
+                              final orderId = await _authService.createOrder(
+                                userId: uid,
+                                restaurantId: restaurantId,
+                                restaurantName: restaurantName,
+                                address: _addressController.text,
+                                paymentMethod: _paymentMethod!,
+                                items: cartItems.map((doc) => doc.data() as Map<String, dynamic>).toList(),
+                                total: total,
+                              );
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Order placed successfully!')),
+                              );
+
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => OrderConfirmationScreen(orderId: orderId),
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to place order')),
+                              );
+                            } finally {
+                              setState(() => _isPlacingOrder = false);
+                            }
+                          },
+                    child: _isPlacingOrder
+                        ? CircularProgressIndicator(color: Colors.white)
+                        : Text('Place Order'),
+                  ),
                 ),
               ],
             ),

@@ -21,64 +21,67 @@ class AuthService {
   String? _selectedPaymentMethod;
 
   /// ✅ Create Order Method
-  Future<void> createOrder({
-    required String userId,
-    required String restaurantId,
-    required String restaurantName,
-    required String address,
-    required String paymentMethod,
-    required List<Map<String, dynamic>> items,
-    required double total,
-  }) async {
-    final now = Timestamp.now();
-    final orderId = _firestore.collection('orders').doc().id;
+  Future<String> createOrder({
+  required String userId,
+  required String restaurantId,
+  required String restaurantName,
+  required String address,
+  required String paymentMethod,
+  required List<Map<String, dynamic>> items,
+  required double total,
+}) async {
+  final now = Timestamp.now();
+  final orderId = _firestore.collection('orders').doc().id;
 
-    final orderData = {
+  final orderData = {
+    'orderId': orderId,
+    'userId': userId,
+    'restaurantId': restaurantId,
+    'restaurantName': restaurantName,
+    'shippingAddress': address,
+    'paymentMethod': paymentMethod,
+    'items': items,
+    'total': total,
+    'status': 'pending',
+    'createdAt': now,
+    'updatedAt': now,
+  };
+
+  final batch = _firestore.batch();
+
+  // Save to top-level orders
+  batch.set(_firestore.collection('orders').doc(orderId), orderData);
+
+  // Save to user's orders
+  batch.set(
+    _firestore.collection('users').doc(userId).collection('orders').doc(orderId),
+    {
       'orderId': orderId,
-      'userId': userId,
-      'restaurantId': restaurantId,
       'restaurantName': restaurantName,
-      'shippingAddress': address,
-      'paymentMethod': paymentMethod,
-      'items': items,
       'total': total,
       'status': 'pending',
       'createdAt': now,
-      'updatedAt': now,
-    };
+    },
+  );
 
-    final batch = _firestore.batch();
+  // Save to restaurant's orders
+  batch.set(
+    _firestore.collection('restaurants').doc(restaurantId).collection('orders').doc(orderId),
+    {
+      'orderId': orderId,
+      'userId': userId,
+      'total': total,
+      'status': 'pending',
+      'createdAt': now,
+    },
+  );
 
-    // Save to top-level orders
-    batch.set(_firestore.collection('orders').doc(orderId), orderData);
+  await batch.commit();
+  print("✅ Order created: $orderId");
 
-    // Save to user's orders
-    batch.set(
-      _firestore.collection('users').doc(userId).collection('orders').doc(orderId),
-      {
-        'orderId': orderId,
-        'restaurantName': restaurantName,
-        'total': total,
-        'status': 'pending',
-        'createdAt': now,
-      },
-    );
+  return orderId; // 🛑 return the created orderId
+}
 
-    // Save to restaurant's orders
-    batch.set(
-      _firestore.collection('restaurants').doc(restaurantId).collection('orders').doc(orderId),
-      {
-        'orderId': orderId,
-        'userId': userId,
-        'total': total,
-        'status': 'pending',
-        'createdAt': now,
-      },
-    );
-
-    await batch.commit();
-    print("✅ Order created: $orderId");
-  }
 
   /// ✅ Send OTP to Email
   Future<void> sendOtpToEmail(String email) async {
