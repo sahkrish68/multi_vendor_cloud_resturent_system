@@ -153,6 +153,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 total: total,
                               );
 
+                              // ✅ Get user email
+                              final userEmail = FirebaseAuth.instance.currentUser?.email;
+
+                              // ✅ Send order confirmation email
+                              if (userEmail != null) {
+                                await _authService.sendOrderConfirmationEmail(
+                                  toEmail: userEmail,
+                                  orderId: orderId,
+                                  restaurantName: restaurantName,
+                                  total: total,
+                                );
+                              }
+
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text('Order placed successfully!')),
                               );

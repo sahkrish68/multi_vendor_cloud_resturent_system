@@ -195,6 +195,43 @@ class AuthService {
     }
   }
 
+  Future<void> sendOrderConfirmationEmail({
+  required String toEmail,
+  required String orderId,
+  required String restaurantName,
+  required double total,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+      headers: {
+        'origin': 'http://localhost',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        "service_id": "service_bkoesqf",
+        "template_id": "template_ueqb6ee", // 👉 You will create new Template ID for order confirmation
+        "user_id": "FpkIMUsaeaDnbMnOF",
+        "template_params": {
+          "user_email": toEmail,
+          "order_id": orderId,
+          "restaurant_name": restaurantName,
+          "total_amount": total.toStringAsFixed(2),
+        }
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      print('❌ Failed to send confirmation email');
+    } else {
+      print('✅ Order confirmation email sent successfully');
+    }
+  } catch (e) {
+    print('❌ sendOrderConfirmationEmail error: $e');
+  }
+}
+
+
   /// ✅ Verify OTP
   Future<bool> verifyOtp(String email, String otp) async {
     final doc = await _firestore.collection('emailOtps').doc(email).get();
