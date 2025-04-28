@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'checkout_screen.dart';
 import '../screens/order_confirmation_screen.dart';
-
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 

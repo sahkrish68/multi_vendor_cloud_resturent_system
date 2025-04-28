@@ -33,10 +33,15 @@ class AuthService {
   final now = Timestamp.now();
   final orderId = _firestore.collection('orders').doc().id;
 
+  // Fetch the user's document
+  final userDoc = await _firestore.collection('users').doc(userId).get();
+  final customerName = userDoc.data()?['name'] ?? 'Customer';
+
   final orderData = {
     'orderId': orderId,
     'userId': userId,
     'restaurantId': restaurantId,
+    'customerName': customerName,
     'restaurantName': restaurantName,
     'shippingAddress': address,
     'paymentMethod': paymentMethod,
@@ -79,7 +84,7 @@ class AuthService {
   await batch.commit();
   print("✅ Order created: $orderId");
 
-  return orderId; // 🛑 return the created orderId
+  return orderId;
 }
 
 

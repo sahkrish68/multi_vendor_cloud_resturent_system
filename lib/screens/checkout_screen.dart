@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import 'order_confirmation_screen.dart';
-import 'paypal_payment_screen.dart'; // ✅ Make sure to import it
+import 'paypal_payment_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   @override
@@ -116,10 +116,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             setState(() => _isPlacingOrder = true);
 
                             final restaurantId = items.first['restaurantId'];
-                            final restaurantName = items.first['restaurantName'];
+                            final restaurantName = items.first['restaurantName'] ?? 'Restaurant';
 
                             try {
-                              // ✅ If PayPal selected, open PayPal screen first
+                              // ✅ If PayPal selected, first complete payment
                               if (_paymentMethod == 'credit') {
                                 bool paymentSuccess = await Navigator.push(
                                   context,
@@ -142,7 +142,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 }
                               }
 
-                              // ✅ After PayPal success or if COD selected
+                              // ✅ Then create order
                               final orderId = await _authService.createOrder(
                                 userId: uid,
                                 restaurantId: restaurantId,
@@ -152,19 +152,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 items: cartItems.map((doc) => doc.data() as Map<String, dynamic>).toList(),
                                 total: total,
                               );
-
-                              // ✅ Get user email
-                              final userEmail = FirebaseAuth.instance.currentUser?.email;
-
                               // ✅ Send order confirmation email
-                              if (userEmail != null) {
-                                await _authService.sendOrderConfirmationEmail(
-                                  toEmail: userEmail,
-                                  orderId: orderId,
-                                  restaurantName: restaurantName,
-                                  total: total,
+                                final userEmail = FirebaseAuth.instance.currentUser?.email;
+                                if (userEmail != null) {
+                                  await _authService.sendOrderConfirmationEmail(
+                                    toEmail: userEmail,
+                                    orderId: orderId,
+                                    restaurantName: restaurantName,
+                                    total: total,
                                 );
-                              }
+                                }
 
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text('Order placed successfully!')),
@@ -177,6 +174,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ),
                               );
                             } catch (e) {
+                              print("CreateOrder Error: $e");
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text('Failed to place order')),
                               );
