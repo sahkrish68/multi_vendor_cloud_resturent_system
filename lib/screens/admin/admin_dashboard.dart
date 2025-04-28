@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
 import 'package:multi_vendor_cloud_resturent_system/screens/login_screen.dart';
+import 'package:multi_vendor_cloud_resturent_system/screens/admin/order_details_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   @override
@@ -20,9 +21,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<DocumentSnapshot> _restaurants = [];
   List<DocumentSnapshot> _pendingApprovals = [];
   Map<String, List<DocumentSnapshot>> _restaurantMenus = {};
+  Map<String, double> _restaurantSales = {};
   List<DocumentSnapshot> _recentActivities = [];
 
   bool _isLoading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -51,6 +54,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
       for (var doc in _restaurants) {
         await _loadRestaurantMenu(doc.id);
+        await _loadRestaurantSales(doc.id);
       }
     } catch (e) {
       print("LoadRestaurants Error: $e");
@@ -68,6 +72,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _restaurantMenus[restaurantId] = snapshot.docs;
     } catch (e) {
       print("LoadRestaurantMenu Error: $e");
+    }
+  }
+
+  Future<void> _loadRestaurantSales(String restaurantId) async {
+    try {
+      final orderSnapshot = await _firestore
+          .collection('orders')
+          .where('restaurantId', isEqualTo: restaurantId)
+          .get();
+
+      double totalSales = 0;
+      for (var doc in orderSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        totalSales += (data?['totalAmount'] ?? 0).toDouble();
+      }
+
+      _restaurantSales[restaurantId] = totalSales;
+    } catch (e) {
+      print("LoadRestaurantSales Error: $e");
     }
   }
 
@@ -112,9 +135,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> _approveTrader(String id) async {
     try {
-      await _firestore.collection('traders').doc(id).update({
-        'isApproved': true,
-      });
+      await _firestore.collection('traders').doc(id).update({'isApproved': true});
 
       final restaurantSnap = await _firestore
           .collection('restaurants')
@@ -214,6 +235,56 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
+  Future<void> _showOrderDetailsDialog(String orderId) async {
+  try {
+    final doc = await _firestore.collection('orders').doc(orderId).get();
+
+    if (!doc.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Order not found')));
+      return;
+    }
+
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Order Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Order ID: $orderId"),
+              SizedBox(height: 8),
+              Text("Customer: ${data['customerName'] ?? 'Unknown'}"),
+              Text("Restaurant: ${data['restaurantName'] ?? 'Unknown'}"),
+              Text("Payment Method: ${data['paymentMethod'] ?? 'Unknown'}"),
+              SizedBox(height: 12),
+              Text("Items Ordered:", style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              ...((data['items'] as List<dynamic>? ?? []).map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text("- ${item['name']} x${item['quantity']}"),
+                );
+              }).toList()),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Close'),
+            onPressed: () => Navigator.pop(context),
+          )
+        ],
+      ),
+    );
+  } catch (e) {
+    print("ShowOrderDetailsDialog Error: $e");
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load order details')));
+  }
+}
+
 
   Widget _buildRestaurantsTab() {
     return ListView.builder(
@@ -245,6 +316,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Text(data['name'] ?? 'Unnamed',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     Text(data['address'] ?? '', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      "Sales: \$${_restaurantSales[restaurantId]?.toStringAsFixed(2) ?? '0.00'}",
+                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
@@ -267,57 +342,79 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildDashboardTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Overview", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            childAspectRatio: 1.3,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: [
-              _buildStatCard("Total Restaurants", _restaurants.length.toString(), Icons.restaurant, Colors.blue),
-              _buildStatCard("Pending Traders", _pendingApprovals.length.toString(), Icons.pending, Colors.orange),
-              _buildStatCard("Total Menu Items", _calculateTotalMenuItems().toString(), Icons.menu_book, Colors.purple),
-              _buildStatCard("Active Traders", _restaurants.length.toString(), Icons.people, Colors.green),
-            ],
+ Widget _buildDashboardTab() {
+  return SingleChildScrollView(
+    padding: EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Overview", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        SizedBox(height: 16),
+        GridView.count(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          childAspectRatio: 1.3,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          children: [
+            _buildStatCard("Total Restaurants", _restaurants.length.toString(), Icons.restaurant, Colors.blue),
+            _buildStatCard("Pending Traders", _pendingApprovals.length.toString(), Icons.pending, Colors.orange),
+            _buildStatCard("Total Menu Items", _calculateTotalMenuItems().toString(), Icons.menu_book, Colors.purple),
+            _buildStatCard("Active Traders", _restaurants.length.toString(), Icons.people, Colors.green),
+          ],
+        ),
+        SizedBox(height: 24),
+        TextField(
+          decoration: InputDecoration(
+            hintText: 'Search by Order Number...',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          SizedBox(height: 24),
-          Text("Recent Activities", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          SizedBox(height: 12),
-          _recentActivities.isEmpty
-              ? Text("No recent activity found.")
-              : Column(
-                  children: _recentActivities.map((doc) {
-                    final data = (doc.data() as Map<String, dynamic>?) ?? {};
-                    final isOrder = data.containsKey('items');
-                    final timestamp = data['createdAt'] ?? data['approvedAt'];
+          onChanged: (value) {
+            setState(() => _searchQuery = value.trim());
+          },
+        ),
+        SizedBox(height: 12),
+        Text("Recent Activities", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        SizedBox(height: 12),
+        _recentActivities.isEmpty
+            ? Text("No recent activity found.")
+            : Column(
+                children: _recentActivities.where((doc) {
+                  if (_searchQuery.isEmpty) return true;
+                  final data = doc.data() as Map<String, dynamic>? ?? {};
+                  final isOrder = data.containsKey('items');
+                  if (!isOrder) return true;
+                  return doc.id.toLowerCase().contains(_searchQuery.toLowerCase());
+                }).map((doc) {
+                  final data = (doc.data() as Map<String, dynamic>?) ?? {};
+                  final isOrder = data.containsKey('items');
+                  final timestamp = data['createdAt'] ?? data['approvedAt'];
 
-                    return ListTile(
-                      leading: Icon(
-                        isOrder ? Icons.shopping_bag : Icons.restaurant,
-                        color: isOrder ? Colors.green : Colors.blue,
-                      ),
-                      title: Text(
-                        isOrder
-                            ? "Order #${doc.id.substring(0, 6)}"
-                            : "Approved: ${data['name'] ?? 'Unnamed Restaurant'}",
-                      ),
-                      subtitle: Text(_formatTimestamp(timestamp)),
-                    );
-                  }).toList(),
-                )
-        ],
-      ),
-    );
-  }
+                  return ListTile(
+                    leading: Icon(
+                      isOrder ? Icons.shopping_bag : Icons.restaurant,
+                      color: isOrder ? Colors.green : Colors.blue,
+                    ),
+                    title: Text(
+                      isOrder
+                          ? "Order #${doc.id.substring(0, 6)}"
+                          : "Approved: ${data['name'] ?? 'Unnamed Restaurant'}",
+                    ),
+                    subtitle: Text(_formatTimestamp(timestamp)),
+                    onTap: () {
+                      if (isOrder) {
+                        _showOrderDetailsDialog(doc.id);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+      ],
+    ),
+  );
+}
 
   Widget _buildApprovalsTab() {
     return ListView.builder(
