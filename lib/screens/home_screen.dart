@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
-import 'package:intl/intl.dart';
 import 'restaurant_detail_screen.dart';
 import 'cart_screen.dart';
 import 'category_restaurants_screen.dart';
@@ -22,6 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   String _searchQuery = '';
   int _favoritesCount = 0;
+  String _menuSortOption = 'None';
+  String _sortOption = 'None';
 
   @override
   void initState() {
@@ -65,7 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _signOut() async {
     try {
       await _auth.signOut();
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error signing out: $e')),
@@ -100,42 +104,39 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-Future<void> _addToCart(Map<String, dynamic> itemData, String restaurantId, String itemId) async {
-  final userId = _firebaseAuth.currentUser?.uid;
-  if (userId == null) return;
 
-  final cartRef = _firestore.collection('users').doc(userId).collection('cart');
+  Future<void> _addToCart(Map<String, dynamic> itemData, String restaurantId, String itemId) async {
+    final userId = _firebaseAuth.currentUser?.uid;
+    if (userId == null) return;
 
-  // Check if the item already exists in the cart
-  final existingItem = await cartRef
-    .where('itemId', isEqualTo: itemId)
-    .where('restaurantId', isEqualTo: restaurantId)
-    .limit(1)
-    .get();
+    final cartRef = _firestore.collection('users').doc(userId).collection('cart');
 
-  if (existingItem.docs.isNotEmpty) {
-    // Item exists: increase quantity by 1
-    final docId = existingItem.docs.first.id;
-    final currentQuantity = existingItem.docs.first.data()['quantity'] ?? 1;
-    await cartRef.doc(docId).update({'quantity': currentQuantity + 1});
-  } else {
-    // Item does not exist: create new
-    await cartRef.add({
-      'itemId': itemId,
-      'restaurantId': restaurantId,
-      'name': itemData['name'] ?? '',
-      'price': itemData['price'] ?? 0,
-      'quantity': 1,
-      'addedAt': FieldValue.serverTimestamp(),
-      'imageUrl': itemData['imageUrl'] ?? '',
-    });
+    final existingItem = await cartRef
+        .where('itemId', isEqualTo: itemId)
+        .where('restaurantId', isEqualTo: restaurantId)
+        .limit(1)
+        .get();
+
+    if (existingItem.docs.isNotEmpty) {
+      final docId = existingItem.docs.first.id;
+      final currentQuantity = existingItem.docs.first.data()['quantity'] ?? 1;
+      await cartRef.doc(docId).update({'quantity': currentQuantity + 1});
+    } else {
+      await cartRef.add({
+        'itemId': itemId,
+        'restaurantId': restaurantId,
+        'name': itemData['name'] ?? '',
+        'price': itemData['price'] ?? 0,
+        'quantity': 1,
+        'addedAt': FieldValue.serverTimestamp(),
+        'imageUrl': itemData['imageUrl'] ?? '',
+      });
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added to cart')),
+    );
   }
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Added to cart')),
-  );
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -223,43 +224,172 @@ Future<void> _addToCart(Map<String, dynamic> itemData, String restaurantId, Stri
     }
   }
 
- Widget _buildHomeTab() {
-  return SingleChildScrollView(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSearchBar(),
-
-        _buildRestaurantList(
-          title: 'All Restaurants',
-          query: _firestore.collection('restaurants').limit(20),
-        ),
-
-        _buildSectionHeader('Categories'),
-        _buildCategoryGrid(),
-
-        _buildSectionHeader('All Menu Items'),
-        _buildMenuItemsList(),
-      ],
-    ),
-  );
-}
+  Widget _buildHomeTab() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSearchBar(),
+          _buildRestaurantList(
+            title: 'All Restaurants',
+            query: _firestore.collection('restaurants').limit(20),
+          ),
+          _buildSectionHeader('Categories'),
+          _buildCategoryGrid(),
+          _buildSectionHeader('All Menu Items'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                Text("Sort by Price: "),
+                SizedBox(width: 10),
+                DropdownButton<String>(
+                  value: _menuSortOption,
+                  items: ['None', 'Low to High', 'High to Low']
+                      .map((String value) => DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          ))
+                      .toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _menuSortOption = newValue!;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          _buildMenuItemsList(),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSearchTab() {
-    return Column(
-      children: [
-        _buildSearchBar(),
-        Expanded(
-          child: _buildRestaurantList(
-            title: 'Search Results',
-            query: _searchQuery.isNotEmpty
-              ? _firestore.collection('restaurants')
-                  .where('name', isGreaterThanOrEqualTo: _searchQuery)
-                  .where('name', isLessThan: _searchQuery + 'z')
-              : _firestore.collection('restaurants').limit(10),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSearchBar(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                Text("Sort by: "),
+                SizedBox(width: 10),
+                DropdownButton<String>(
+                  value: _sortOption,
+                  items: ['None', 'Price: Low to High', 'Price: High to Low']
+                      .map((String value) => DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          ))
+                      .toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _sortOption = newValue!;
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          _buildRestaurantList(
+            title: 'Search Results - Restaurants',
+            query: _getRestaurantQuery(),
+          ),
+          _buildSectionHeader('Matching Menu Items'),
+          _buildSearchedMenuItems(),
+        ],
+      ),
+    );
+  }
+
+  Query _getRestaurantQuery() {
+    Query query = _firestore.collection('restaurants');
+
+    if (_searchQuery.isNotEmpty) {
+      query = query
+          .where('name', isGreaterThanOrEqualTo: _searchQuery)
+          .where('name', isLessThan: _searchQuery + 'z');
+    }
+
+    if (_sortOption == 'Price: Low to High') {
+      query = query.orderBy('averagePrice', descending: false);
+    } else if (_sortOption == 'Price: High to Low') {
+      query = query.orderBy('averagePrice', descending: true);
+    }
+
+    return query;
+  }
+
+  Widget _buildSearchedMenuItems() {
+    if (_searchQuery.isEmpty) return SizedBox.shrink();
+
+    Query<Map<String, dynamic>> query = _firestore.collectionGroup('menu')
+        .where('name', isGreaterThanOrEqualTo: _searchQuery)
+        .where('name', isLessThan: _searchQuery + 'z');
+
+    if (_sortOption == 'Price: Low to High') {
+      query = query.orderBy('price', descending: false);
+    } else if (_sortOption == 'Price: High to Low') {
+      query = query.orderBy('price', descending: true);
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: query.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          print('Menu search error: ${snapshot.error}');
+          return Center(child: Text('Error loading menu items'));
+        }
+
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+
+        final items = snapshot.data!.docs;
+
+        if (items.isEmpty) return Center(child: Text('No matching menu items found.'));
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final itemData = items[index].data() as Map<String, dynamic>? ?? {};
+            final itemId = items[index].id;
+            final restaurantId = items[index].reference.parent.parent?.id ?? '';
+
+            return Card(
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: itemData['imageUrl'] != null
+                      ? Image.network(
+                          itemData['imageUrl'],
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.grey[300],
+                          child: Icon(Icons.fastfood, size: 30),
+                        ),
+                ),
+                title: Text(itemData['name'] ?? 'Unnamed Item'),
+                subtitle: Text('₹${itemData['price']?.toStringAsFixed(2) ?? '0.00'}'),
+                trailing: IconButton(
+                  icon: Icon(Icons.add_shopping_cart, color: Colors.green),
+                  onPressed: () => _addToCart(itemData, restaurantId, itemId),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -304,122 +434,71 @@ Future<void> _addToCart(Map<String, dynamic> itemData, String restaurantId, Stri
   }
 
   Widget _buildProfileTab() {
-  final userId = _firebaseAuth.currentUser?.uid;
-  if (userId == null) return _buildAuthPrompt('Guest User');
+    final userId = _firebaseAuth.currentUser?.uid;
+    if (userId == null) return _buildAuthPrompt('Guest User');
 
-  return StreamBuilder<DocumentSnapshot>(
-    stream: _firestore.collection('users').doc(userId).snapshots(),
-    builder: (context, snapshot) {
-      if (snapshot.hasError) return Center(child: Text('Error loading profile'));
-      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(userId).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text('Error loading profile'));
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
-      final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
 
-      return SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 50,
-              backgroundImage: data['photoUrl'] != null ? NetworkImage(data['photoUrl']) : null,
-              child: data['photoUrl'] == null ? Icon(Icons.person, size: 50) : null,
-            ),
-            SizedBox(height: 16),
-            Text(
-              data['name'] ?? 'No Name',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text(data['email'] ?? ''),
-            SizedBox(height: 24),
-
-            // ✅ Order History Section
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Order History',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundImage: data['photoUrl'] != null ? NetworkImage(data['photoUrl']) : null,
+                child: data['photoUrl'] == null ? Icon(Icons.person, size: 50) : null,
               ),
-            ),
-            SizedBox(height: 8),
-            StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('users')
-                  .doc(userId)
-                  .collection('orders')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) return Text('Error loading orders');
-                if (!snapshot.hasData) return CircularProgressIndicator();
-
-                final orders = snapshot.data!.docs;
-
-                if (orders.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text('No orders yet.'),
+              SizedBox(height: 16),
+              Text(
+                data['name'] ?? 'No Name',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(data['email'] ?? ''),
+              SizedBox(height: 24),
+              ListTile(
+                leading: Icon(Icons.receipt_long),
+                title: Text('Order History'),
+                trailing: Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => OrderHistoryScreen()),
                   );
-                }
-
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  itemCount: orders.length,
-                  itemBuilder: (context, index) {
-                    final order = orders[index].data() as Map<String, dynamic>;
-                    final createdAt = (order['createdAt'] as Timestamp?)?.toDate();
-                    final status = order['status'] ?? 'unknown';
-                    final total = order['total'] ?? 0.0;
-                    final restaurant = order['restaurantName'] ?? 'Restaurant';
-
-                    return Card(
-                      margin: EdgeInsets.symmetric(vertical: 8),
-                      child: ListTile(
-                        leading: Icon(Icons.receipt_long),
-                        title: Text('$restaurant • ₹$total'),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Status: ${status.toUpperCase()}'),
-                            if (createdAt != null)
-                              Text('Ordered: ${DateFormat.yMd().add_jm().format(createdAt)}'),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-
-            SizedBox(height: 24),
-            ListTile(
-              leading: Icon(Icons.favorite),
-              title: Text('Favorites'),
-              onTap: () => setState(() => _currentIndex = 2),
-            ),
-            ListTile(
-              leading: Icon(Icons.settings),
-              title: Text('Settings'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => SettingsScreen()),
-                );
-              }
-            ),
-            SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _signOut,
-              child: Text('Sign Out'),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.favorite),
+                title: Text('Favorites'),
+                onTap: () => setState(() => _currentIndex = 2),
+              ),
+              ListTile(
+                leading: Icon(Icons.settings),
+                title: Text('Settings'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SettingsScreen()),
+                  );
+                },
+              ),
+              SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _signOut,
+                child: Text('Sign Out'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildSearchBar() {
     return Padding(
@@ -436,7 +515,6 @@ Future<void> _addToCart(Map<String, dynamic> itemData, String restaurantId, Stri
       ),
     );
   }
-
   Widget _buildCategoryGrid() {
     List<Map<String, dynamic>> categories = [
       {'name': 'Appetizer', 'icon': Icons.restaurant_menu},
@@ -487,10 +565,22 @@ Future<void> _addToCart(Map<String, dynamic> itemData, String restaurantId, Stri
     );
   }
 Widget _buildMenuItemsList() {
+  Query<Map<String, dynamic>> query = _firestore.collectionGroup('menu');
+
+  if (_menuSortOption == 'Low to High') {
+    query = query.orderBy('price', descending: false);
+  } else if (_menuSortOption == 'High to Low') {
+    query = query.orderBy('price', descending: true);
+  }
+
   return StreamBuilder<QuerySnapshot>(
-    stream: _firestore.collectionGroup('menu').snapshots(),
+    stream: query.snapshots(),
     builder: (context, snapshot) {
-      if (snapshot.hasError) return Center(child: Text('Error loading menu items'));
+      if (snapshot.hasError) {
+        print('🔥 Firestore menu load error: ${snapshot.error}');
+        return Center(child: Text('Error: ${snapshot.error}'));
+      }
+
       if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
       final items = snapshot.data!.docs;
@@ -512,18 +602,18 @@ Widget _buildMenuItemsList() {
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: itemData['imageUrl'] != null
-                  ? Image.network(
-                      itemData['imageUrl'],
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      width: 60,
-                      height: 60,
-                      color: Colors.grey[300],
-                      child: Icon(Icons.fastfood, size: 30),
-                    ),
+                    ? Image.network(
+                        itemData['imageUrl'],
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        width: 60,
+                        height: 60,
+                        color: Colors.grey[300],
+                        child: Icon(Icons.fastfood, size: 30),
+                      ),
               ),
               title: Text(itemData['name'] ?? 'Unnamed Item'),
               subtitle: Text('₹${itemData['price']?.toStringAsFixed(2) ?? '0.00'}'),
@@ -538,7 +628,6 @@ Widget _buildMenuItemsList() {
     },
   );
 }
-
 
  Widget _buildRestaurantList({
     required String title,
