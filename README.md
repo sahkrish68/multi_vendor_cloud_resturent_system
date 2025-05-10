@@ -171,8 +171,9 @@ dependencies:
 ## 👨‍💻 Developer Info
 
 - **Project Title:** Multi-Vendor Cloud Restaurant System
-- **Developer:** Hsirk Has
+- **Developer:** Krish Bikram Sah
 - **University:** Leeds Beckett University
+- **College:** The British College
 - **Degree:** BSc (Hons) Computing - Final Year Project
 - **Year:** 2025
 
